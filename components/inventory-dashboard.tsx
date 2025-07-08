@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { SkuDetailView } from "./sku-detail-view"
 
 const inventoryData = [
   {
@@ -76,6 +77,18 @@ export function InventoryDashboard() {
   const [category, setCategory] = useState("All Categories")
   const [warehouse, setWarehouse] = useState("All Warehouses")
   const [stockStatus, setStockStatus] = useState("All Status")
+  const [currentView, setCurrentView] = useState<"dashboard" | "sku-detail">("dashboard")
+  const [selectedSku, setSelectedSku] = useState<any>(null)
+
+  const handleSkuClick = (item: any) => {
+    setSelectedSku(item)
+    setCurrentView("sku-detail")
+  }
+
+  const handleBackToDashboard = () => {
+    setCurrentView("dashboard")
+    setSelectedSku(null)
+  }
 
   const filteredData = inventoryData.filter((item) => {
     const matchesSearch =
@@ -107,6 +120,10 @@ export function InventoryDashboard() {
           item.ecmm === 0))
     return matchesSearch && matchesCategory && matchesWarehouse && matchesStockStatus
   })
+
+  if (currentView === "sku-detail" && selectedSku) {
+    return <SkuDetailView sku={selectedSku} onBack={handleBackToDashboard} />
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -251,7 +268,14 @@ export function InventoryDashboard() {
                 {filteredData.map((item, index) => (
                   <TableRow key={index} className="hover:bg-gray-50">
                     <TableCell className="font-mono text-sm text-blue-600">{item.barcode}</TableCell>
-                    <TableCell className="font-medium">{item.product}</TableCell>
+                    <TableCell className="font-medium">
+                      <button
+                        onClick={() => handleSkuClick(item)}
+                        className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                      >
+                        {item.product}
+                      </button>
+                    </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {item.category}
