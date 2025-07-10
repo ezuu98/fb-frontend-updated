@@ -4,6 +4,7 @@ import { ArrowLeft, Search, User } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+<<<<<<< HEAD
 import type { InventoryWithDetails } from "@/lib/supabase"
 
 interface SkuDetailViewProps {
@@ -46,6 +47,84 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     },
   )
 
+=======
+
+interface SkuDetailViewProps {
+  sku: {
+    barcode: string
+    product: string
+    category: string
+    subCategory: string
+  }
+  onBack: () => void
+}
+
+const warehouseData = [
+  {
+    warehouse: "Main Warehouse",
+    openingStock: 1000,
+    purchases: 500,
+    purchaseReturns: 50,
+    sales: 600,
+    wastages: 20,
+    transferIn: 100,
+    transferOut: 50,
+    manufacturingImpact: 0,
+    closingStock: 880,
+  },
+  {
+    warehouse: "Branch A",
+    openingStock: 500,
+    purchases: 200,
+    purchaseReturns: 20,
+    sales: 300,
+    wastages: 10,
+    transferIn: 50,
+    transferOut: 20,
+    manufacturingImpact: 0,
+    closingStock: 440,
+  },
+  {
+    warehouse: "Branch B",
+    openingStock: 300,
+    purchases: 100,
+    purchaseReturns: 10,
+    sales: 150,
+    wastages: 5,
+    transferIn: 20,
+    transferOut: 10,
+    manufacturingImpact: 0,
+    closingStock: 255,
+  },
+  {
+    warehouse: "Online Store",
+    openingStock: 200,
+    purchases: 50,
+    purchaseReturns: 5,
+    sales: 100,
+    wastages: 2,
+    transferIn: 10,
+    transferOut: 5,
+    manufacturingImpact: 0,
+    closingStock: 158,
+  },
+]
+
+const totalRow = {
+  warehouse: "Total",
+  openingStock: 2000,
+  purchases: 850,
+  purchaseReturns: 85,
+  sales: 1150,
+  wastages: 37,
+  transferIn: 180,
+  transferOut: 85,
+  manufacturingImpact: 0,
+  closingStock: 1833,
+}
+
+export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
+>>>>>>> ce88eb48082ad9403820865f8236f456892730ea
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -104,6 +183,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
           {/* SKU Header */}
           <div className="mb-8">
+<<<<<<< HEAD
             <h1 className="text-3xl font-bold text-gray-900 mb-2">SKU: {sku.product_name}</h1>
             <div className="flex items-center space-x-4 text-sm text-gray-600">
               <span>Barcode: {sku.barcode}</span>
@@ -113,6 +193,10 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
               <span>Reorder Level: {sku.reorder_level}</span>
             </div>
             <p className="text-gray-600 mt-2">Real-time inventory levels across all warehouse locations</p>
+=======
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">SKU: {sku.product}</h1>
+            <p className="text-gray-600">Detailed inventory calculations for closing stock per warehouse</p>
+>>>>>>> ce88eb48082ad9403820865f8236f456892730ea
           </div>
 
           {/* Warehouse Inventory Table */}
@@ -125,17 +209,35 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
+<<<<<<< HEAD
                     <TableHead className="font-medium text-gray-700 min-w-[150px]">Warehouse</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Opening Stock</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Current Stock</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Reserved</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Available</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Last Updated</TableHead>
+=======
+                    <TableHead className="font-medium text-gray-700 min-w-[120px]">Warehouse</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Opening Stock</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchases</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">
+                      Purchase Returns
+                    </TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[80px]">Sales</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px]">Wastages</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px]">Transfer In</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Transfer Out</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">
+                      Manufacturing Impact
+                    </TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Closing Stock</TableHead>
+>>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {warehouseData.map((row, index) => (
                     <TableRow key={index} className="hover:bg-gray-50">
+<<<<<<< HEAD
                       <TableCell className="font-medium">
                         <div>
                           <div className="font-medium">{row.warehouse}</div>
@@ -147,21 +249,45 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                       <TableCell className="text-center text-orange-600">{row.reservedStock}</TableCell>
                       <TableCell className="text-center text-green-600 font-medium">{row.availableStock}</TableCell>
                       <TableCell className="text-center text-sm text-gray-500">{row.lastUpdated}</TableCell>
+=======
+                      <TableCell className="font-medium">{row.warehouse}</TableCell>
+                      <TableCell className="text-center text-blue-600">{row.openingStock}</TableCell>
+                      <TableCell className="text-center">{row.purchases}</TableCell>
+                      <TableCell className="text-center">{row.purchaseReturns}</TableCell>
+                      <TableCell className="text-center">{row.sales}</TableCell>
+                      <TableCell className="text-center">{row.wastages}</TableCell>
+                      <TableCell className="text-center">{row.transferIn}</TableCell>
+                      <TableCell className="text-center">{row.transferOut}</TableCell>
+                      <TableCell className="text-center">{row.manufacturingImpact}</TableCell>
+                      <TableCell className="text-center text-blue-600 font-medium">{row.closingStock}</TableCell>
+>>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                     </TableRow>
                   ))}
                   {/* Total Row */}
                   <TableRow className="bg-gray-50 border-t-2 border-gray-200">
                     <TableCell className="font-bold">{totalRow.warehouse}</TableCell>
                     <TableCell className="text-center font-bold text-blue-600">{totalRow.openingStock}</TableCell>
+<<<<<<< HEAD
                     <TableCell className="text-center font-bold">{totalRow.currentStock}</TableCell>
                     <TableCell className="text-center font-bold text-orange-600">{totalRow.reservedStock}</TableCell>
                     <TableCell className="text-center font-bold text-green-600">{totalRow.availableStock}</TableCell>
                     <TableCell className="text-center font-bold">-</TableCell>
+=======
+                    <TableCell className="text-center font-bold">{totalRow.purchases}</TableCell>
+                    <TableCell className="text-center font-bold">{totalRow.purchaseReturns}</TableCell>
+                    <TableCell className="text-center font-bold">{totalRow.sales}</TableCell>
+                    <TableCell className="text-center font-bold">{totalRow.wastages}</TableCell>
+                    <TableCell className="text-center font-bold">{totalRow.transferIn}</TableCell>
+                    <TableCell className="text-center font-bold">{totalRow.transferOut}</TableCell>
+                    <TableCell className="text-center font-bold">{totalRow.manufacturingImpact}</TableCell>
+                    <TableCell className="text-center font-bold text-blue-600">{totalRow.closingStock}</TableCell>
+>>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                   </TableRow>
                 </TableBody>
               </Table>
             </div>
           </div>
+<<<<<<< HEAD
 
           {/* Product Details */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -219,6 +345,8 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
               </div>
             </div>
           </div>
+=======
+>>>>>>> ce88eb48082ad9403820865f8236f456892730ea
         </div>
       </main>
 
