@@ -1,22 +1,14 @@
 "use client"
 
-<<<<<<< HEAD
 import { useState, useMemo } from "react"
 import { Search, Filter, Download, ChevronDown, User, LogOut, AlertTriangle, Edit, Database } from "lucide-react"
-=======
-import { useState } from "react"
-import { Search, Filter, Download, ChevronDown, User, LogOut } from "lucide-react"
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-<<<<<<< HEAD
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-=======
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-<<<<<<< HEAD
+
 import {
   Dialog,
   DialogContent,
@@ -43,100 +35,17 @@ import { ExportInventory } from "./export-inventory"
 import { OdooSyncPanel } from "./odoo-sync-panel"
 
 export function InventoryDashboard() {
-=======
-import { SkuDetailView } from "./sku-detail-view"
-
-interface InventoryDashboardProps {
-  user: {
-    email: string
-    name?: string
-  }
-  onLogout: () => void
-}
-
-const inventoryData = [
-  {
-    barcode: "8765432109876",
-    product: "Organic Apples",
-    category: "Produce",
-    subCategory: "Fruits",
-    bdrwh: 150,
-    mhowh: 200,
-    sbzwh: 100,
-    cliwh: 50,
-    bhdwh: 75,
-    ecmm: 125,
-  },
-  {
-    barcode: "1234567890123",
-    product: "Whole Wheat Bread",
-    category: "Bakery",
-    subCategory: "Breads",
-    bdrwh: 80,
-    mhowh: 120,
-    sbzwh: 60,
-    cliwh: 40,
-    bhdwh: 50,
-    ecmm: 70,
-  },
-  {
-    barcode: "9876543210987",
-    product: "Free-Range Eggs",
-    category: "Dairy & Eggs",
-    subCategory: "Eggs",
-    bdrwh: 200,
-    mhowh: 250,
-    sbzwh: 150,
-    cliwh: 100,
-    bhdwh: 125,
-    ecmm: 175,
-  },
-  {
-    barcode: "2345678901234",
-    product: "Almond Milk",
-    category: "Dairy & Eggs",
-    subCategory: "Milk Alternatives",
-    bdrwh: 100,
-    mhowh: 150,
-    sbzwh: 80,
-    cliwh: 60,
-    bhdwh: 75,
-    ecmm: 100,
-  },
-  {
-    barcode: "3456789012345",
-    product: "Chicken Breast",
-    category: "Meat & Poultry",
-    subCategory: "Poultry",
-    bdrwh: 120,
-    mhowh: 180,
-    sbzwh: 90,
-    cliwh: 70,
-    bhdwh: 85,
-    ecmm: 110,
-  },
-]
-
-export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) {
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
   const [searchTerm, setSearchTerm] = useState("")
   const [category, setCategory] = useState("All Categories")
   const [warehouse, setWarehouse] = useState("All Warehouses")
   const [stockStatus, setStockStatus] = useState("All Status")
   const [currentView, setCurrentView] = useState<"dashboard" | "sku-detail">("dashboard")
-<<<<<<< HEAD
   const [selectedSku, setSelectedSku] = useState<InventoryWithDetails | null>(null)
   const [showOdooSync, setShowOdooSync] = useState(false)
-
   const { inventory, loading, error, refetch } = useInventory()
   const { user, profile, signOut } = useAuth()
 
   const handleSkuClick = (item: InventoryWithDetails) => {
-=======
-  const [selectedSku, setSelectedSku] = useState<any>(null)
-
-  const handleSkuClick = (item: any) => {
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
     setSelectedSku(item)
     setCurrentView("sku-detail")
   }
@@ -146,7 +55,6 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
     setSelectedSku(null)
   }
 
-<<<<<<< HEAD
   const handleLogout = async () => {
     await signOut()
   }
@@ -223,44 +131,10 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
       totalValue,
     }
   }, [transformedInventory])
-=======
-  const filteredData = inventoryData.filter((item) => {
-    const matchesSearch =
-      item.product.toLowerCase().includes(searchTerm.toLowerCase()) || item.barcode.includes(searchTerm)
-    const matchesCategory = category === "All Categories" || item.category === category
-    const matchesWarehouse = warehouse === "All Warehouses" || item.barcode.includes(warehouse)
-    const matchesStockStatus =
-      stockStatus === "All Status" ||
-      (stockStatus === "in-stock" &&
-        item.bdrwh > 0 &&
-        item.mhowh > 0 &&
-        item.sbzwh > 0 &&
-        item.cliwh > 0 &&
-        item.bhdwh > 0 &&
-        item.ecmm > 0) ||
-      (stockStatus === "low-stock" &&
-        (item.bdrwh < 100 ||
-          item.mhowh < 100 ||
-          item.sbzwh < 100 ||
-          item.cliwh < 100 ||
-          item.bhdwh < 100 ||
-          item.ecmm < 100)) ||
-      (stockStatus === "out-of-stock" &&
-        (item.bdrwh === 0 ||
-          item.mhowh === 0 ||
-          item.sbzwh === 0 ||
-          item.cliwh === 0 ||
-          item.bhdwh === 0 ||
-          item.ecmm === 0))
-    return matchesSearch && matchesCategory && matchesWarehouse && matchesStockStatus
-  })
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
-
   if (currentView === "sku-detail" && selectedSku) {
     return <SkuDetailView sku={selectedSku} onBack={handleBackToDashboard} />
   }
 
-<<<<<<< HEAD
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -283,8 +157,6 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
     )
   }
 
-=======
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -322,14 +194,10 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
-<<<<<<< HEAD
                     <AvatarImage
                       src={profile?.avatar_url || "/placeholder.svg"}
                       alt={profile?.full_name || user?.email}
                     />
-=======
-                    <AvatarImage src="/placeholder-user.jpg" alt={user.name || user.email} />
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                     <AvatarFallback>
                       <User className="h-4 w-4" />
                     </AvatarFallback>
@@ -339,7 +207,6 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <div className="flex items-center justify-start gap-2 p-2">
                   <div className="flex flex-col space-y-1 leading-none">
-<<<<<<< HEAD
                     {profile?.full_name && <p className="font-medium">{profile.full_name}</p>}
                     <p className="w-[200px] truncate text-sm text-muted-foreground">{user?.email}</p>
                     {profile?.role && (
@@ -351,14 +218,6 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
-=======
-                    {user.name && <p className="font-medium">{user.name}</p>}
-                    <p className="w-[200px] truncate text-sm text-muted-foreground">{user.email}</p>
-                  </div>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onLogout}>
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>
@@ -371,7 +230,6 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
       {/* Main Content */}
       <main className="px-6 py-8">
         <div className="max-w-7xl mx-auto">
-<<<<<<< HEAD
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Live Inventory Tracking</h1>
             <div className="flex space-x-2">
@@ -431,9 +289,6 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
               </CardContent>
             </Card>
           </div>
-=======
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">Live Inventory Tracking</h1>
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
 
           {/* Search and Filters */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -460,24 +315,8 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
                     <SelectItem value="Bakery">Bakery</SelectItem>
                     <SelectItem value="Dairy & Eggs">Dairy & Eggs</SelectItem>
                     <SelectItem value="Meat & Poultry">Meat & Poultry</SelectItem>
-<<<<<<< HEAD
                     <SelectItem value="Beverages">Beverages</SelectItem>
                     <SelectItem value="Pantry">Pantry</SelectItem>
-=======
-                  </SelectContent>
-                </Select>
-
-                <Select value={warehouse} onValueChange={setWarehouse}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Warehouse" />
-                    <ChevronDown className="w-4 h-4" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All Warehouses">All Warehouses</SelectItem>
-                    <SelectItem value="BDRWH">BDRWH</SelectItem>
-                    <SelectItem value="MHOWH">MHOWH</SelectItem>
-                    <SelectItem value="SBZWH">SBZWH</SelectItem>
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                   </SelectContent>
                 </Select>
 
@@ -508,19 +347,12 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
                 <Download className="w-4 h-4" />
               </Button>
             </div>
-<<<<<<< HEAD
             <ExportInventory
               filteredData={filteredData}
               searchTerm={searchTerm}
               category={category}
               stockStatus={stockStatus}
             />
-=======
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
           </div>
 
           {/* Inventory Table */}
@@ -538,11 +370,8 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
                   <TableHead className="font-medium text-gray-700 text-center">CLIWH</TableHead>
                   <TableHead className="font-medium text-gray-700 text-center">BHDWH</TableHead>
                   <TableHead className="font-medium text-gray-700 text-center">ECMM</TableHead>
-<<<<<<< HEAD
                   <TableHead className="font-medium text-gray-700 text-center">Status</TableHead>
                   <TableHead className="font-medium text-gray-700 text-center">Actions</TableHead>
-=======
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -551,13 +380,8 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
                     <TableCell className="font-mono text-sm text-blue-600">{item.barcode}</TableCell>
                     <TableCell className="font-medium">
                       <button
-<<<<<<< HEAD
                         onClick={() => handleSkuClick(item.originalData)}
-=======
-                        onClick={() => handleSkuClick(item)}
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
-                        className="text-blue-600 hover:text-blue-800 hover:underline text-left"
-                      >
+                        className="text-blue-600 hover:text-blue-800 hover:underline text-left"                      >
                         {item.product}
                       </button>
                     </TableCell>
@@ -577,7 +401,6 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
                     <TableCell className="text-center">{item.cliwh}</TableCell>
                     <TableCell className="text-center">{item.bhdwh}</TableCell>
                     <TableCell className="text-center">{item.ecmm}</TableCell>
-<<<<<<< HEAD
                     <TableCell className="text-center">
                       {item.totalStock === 0 ? (
                         <Badge variant="destructive">Out of Stock</Badge>
@@ -603,8 +426,6 @@ export function InventoryDashboard({ user, onLogout }: InventoryDashboardProps) 
                         }
                       />
                     </TableCell>
-=======
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                   </TableRow>
                 ))}
               </TableBody>

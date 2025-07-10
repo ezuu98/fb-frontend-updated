@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-<<<<<<< HEAD
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/hooks/use-auth"
 
@@ -72,54 +71,6 @@ export function LoginPage() {
     } finally {
       setIsLoading(false)
     }
-=======
-
-interface LoginPageProps {
-  onLogin: (credentials: { email: string; password: string; rememberMe: boolean }) => void
-}
-
-export function LoginPage({ onLogin }: LoginPageProps) {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [rememberMe, setRememberMe] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
-
-  const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {}
-
-    if (!email) {
-      newErrors.email = "Email is required"
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = "Please enter a valid email address"
-    }
-
-    if (!password) {
-      newErrors.password = "Password is required"
-    } else if (password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters"
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!validateForm()) {
-      return
-    }
-
-    setIsLoading(true)
-
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
-      onLogin({ email, password, rememberMe })
-    }, 1500)
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
   }
 
   return (
@@ -139,7 +90,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         {/* Login Card */}
         <Card className="shadow-xl border-0">
           <CardHeader className="space-y-1 pb-6">
-<<<<<<< HEAD
             <CardTitle className="text-2xl font-bold text-center">
               {isSignUp ? "Create Account" : "Welcome Back"}
             </CardTitle>
@@ -179,39 +129,19 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               {/* Email Field */}
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address *</Label>
-=======
-            <CardTitle className="text-2xl font-bold text-center">Welcome Back</CardTitle>
-            <CardDescription className="text-center">Sign in to your account to continue</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email Field */}
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                 <Input
                   id="email"
                   type="email"
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-<<<<<<< HEAD
                   required
                 />
-=======
-                  className={errors.email ? "border-red-500" : ""}
-                />
-                {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
               </div>
 
               {/* Password Field */}
               <div className="space-y-2">
-<<<<<<< HEAD
                 <Label htmlFor="password">Password *</Label>
-=======
-                <Label htmlFor="password">Password</Label>
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                 <div className="relative">
                   <Input
                     id="password"
@@ -219,13 +149,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-<<<<<<< HEAD
                     className="pr-10"
                     required
                     minLength={6}
-=======
-                    className={errors.password ? "border-red-500 pr-10" : "pr-10"}
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                   />
                   <button
                     type="button"
@@ -235,7 +161,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-<<<<<<< HEAD
                 {isSignUp && <p className="text-xs text-gray-500">Password must be at least 6 characters long</p>}
               </div>
 
@@ -253,44 +178,20 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               )}
 
               {/* Submit Button */}
-=======
-                {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
-              </div>
-
-              {/* Remember Me */}
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="remember"
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                />
-                <Label htmlFor="remember" className="text-sm font-normal">
-                  Remember me for 30 days
-                </Label>
-              </div>
-
-              {/* Login Button */}
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-<<<<<<< HEAD
                     {isSignUp ? "Creating Account..." : "Signing in..."}
                   </>
                 ) : isSignUp ? (
                   "Create Account"
-=======
-                    Signing in...
-                  </>
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
                 ) : (
                   "Sign In"
                 )}
               </Button>
             </form>
 
-<<<<<<< HEAD
             {/* Toggle Sign Up/Sign In */}
             <div className="mt-6 text-center">
               <button
@@ -325,33 +226,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <p>• All new users start with 'staff' role</p>
             <p>• Check your email for confirmation after signup</p>
             <p>• Sample inventory data is already loaded</p>
-=======
-            {/* Additional Links */}
-            <div className="mt-6 text-center space-y-2">
-              <a href="#" className="text-sm text-blue-600 hover:text-blue-800">
-                Forgot your password?
-              </a>
-              <div className="text-sm text-gray-600">
-                Don't have an account?{" "}
-                <a href="#" className="text-blue-600 hover:text-blue-800 font-medium">
-                  Contact Administrator
-                </a>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Demo Credentials */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 className="text-sm font-medium text-blue-900 mb-2">Demo Credentials</h3>
-          <div className="text-xs text-blue-700 space-y-1">
-            <p>
-              <strong>Email:</strong> admin@freshbasket.com
-            </p>
-            <p>
-              <strong>Password:</strong> password123
-            </p>
->>>>>>> ce88eb48082ad9403820865f8236f456892730ea
           </div>
         </div>
 
