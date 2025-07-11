@@ -23,7 +23,7 @@ export class InventoryAPI {
           )
         `, { count: "exact" })
         .eq("is_active", true)
-        .order("product_name")
+        .order("product_name", { ascending: true })
         .range(from, to)
 
       if (error) throw error
@@ -37,6 +37,36 @@ export class InventoryAPI {
       throw error
     }
   }
+  static async searchInventory(query: string): Promise<{
+  data: InventoryWithDetails[]
+  total: number
+}> {
+  try {
+    const { data, error, count } = await supabase
+      .from("inventory")
+      .select(`
+        *,
+        category:categories(*),
+        warehouse_inventory(
+          *,
+          warehouse:warehouses(*)
+        )
+      `, { count: "exact" })
+      .ilike("product_name", `%${query}%`) // Or any column you want to search
+      .eq("is_active", true)
+
+    if (error) throw error
+
+    return {
+      data: data || [],
+      total: count || 0,
+    }
+  } catch (error) {
+    console.error("Error in searchInventory:", error)
+    throw error
+  }
+}
+
 
   // Get single inventory item with details
   static async getInventoryById(id: string): Promise<InventoryWithDetails | null> {

@@ -43,10 +43,10 @@ export function InventoryDashboard() {
   const [currentView, setCurrentView] = useState<"dashboard" | "sku-detail">("dashboard")
   const [selectedSku, setSelectedSku] = useState<InventoryWithDetails | null>(null)
   const [showOdooSync, setShowOdooSync] = useState(false)
-  const { inventory, totalItems, loading, error, refetch } = useInventory()
-  const { user, profile, signOut } = useAuth()
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 100 
+  const itemsPerPage = 30
+  const { inventory, totalItems, loading, error, refetch, searchInventory, getLowStockItems, setPage, page } = useInventory(currentPage, itemsPerPage)
+  const { user, profile, signOut } = useAuth()
 
 
   const handleSkuClick = (item: InventoryWithDetails) => {
@@ -122,16 +122,11 @@ export function InventoryDashboard() {
     setCurrentPage(1)
   }, [searchTerm, category, stockStatus])
 
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage
-    const end = start + itemsPerPage
-    return filteredData.slice(start, end)
-  }, [filteredData, currentPage])
+  const paginatedData = filteredData
 
 
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {
-    const totalProducts = transformedInventory.length
     const lowStockItems = transformedInventory.filter((item) => item.isLowStock).length
     const outOfStockItems = transformedInventory.filter((item) => item.totalStock === 0).length
     const totalValue = transformedInventory.reduce((sum, item) => {
@@ -140,7 +135,7 @@ export function InventoryDashboard() {
     }, 0)
 
     return {
-      totalProducts,
+      totalProducts: totalItems,
       lowStockItems,
       outOfStockItems,
       totalValue,
@@ -437,8 +432,7 @@ export function InventoryDashboard() {
             </Table>
             <div className="flex justify-between items-center py-4">
               <div className="text-sm text-gray-600">
-                Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                {Math.min(currentPage * itemsPerPage, filteredData.length)} of { totalItems} entries
+                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
               </div>
               <div className="flex space-x-2">
                 <Button
@@ -452,8 +446,11 @@ export function InventoryDashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage * itemsPerPage >= filteredData.length}
-                  onClick={() => setCurrentPage((prev) => prev + 1)}
+                  disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
+                  onClick={() => {
+                    setCurrentPage((prev) => prev + 1)
+                    setPage((prev) => prev + 1)
+                  }}
                 >
                   Next
                 </Button>

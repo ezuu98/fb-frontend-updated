@@ -5,13 +5,17 @@ import { supabase } from "@/lib/supabase-client"
 import { InventoryAPI } from "@/lib/api/inventory"
 import type { InventoryWithDetails } from "@/lib/supabase"
 
-export function useInventory() {
+export function useInventory(initialPage = 1, initialLimit = 30) {
   const [inventory, setInventory] = useState<InventoryWithDetails[]>([])
   const [totalItems, setTotalItems] = useState(0)
-  const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(30)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(initialPage)
+  const [limit, setLimit] = useState(initialLimit)
+
+
+  const from = (page - 1) * limit
+  const to = from + limit - 1
 
   const fetchInventory = async () => {
     try {
