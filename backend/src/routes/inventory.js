@@ -9,8 +9,10 @@ const router = express.Router()
 router.get("/", async (req, res) => {
   try {
     const { search, category_id, warehouse_id, page = 1, limit = 50 } = req.query
-
-    logger.info("Fetching inventory items", { search, category_id, warehouse_id, page, limit })
+    const parsedPage = Number.parseInt(page)
+    const parsedLimit = Number.parseInt(limit)
+    const offset = (parsedPage - 1) * parsedLimit
+    const to = offset + parsedLimit - 1
 
     let query = db.supabaseAdmin
       .from("inventory")
@@ -24,7 +26,7 @@ router.get("/", async (req, res) => {
           available_stock,
           warehouses(id, name, code)
         )
-      `)
+      `, {count: "exact"})
       .eq("is_active", true)
 
     // Apply filters
@@ -37,23 +39,20 @@ router.get("/", async (req, res) => {
     }
 
     // Pagination
-    const offset = (Number.parseInt(page) - 1) * Number.parseInt(limit)
-    query = query.range(offset, offset + Number.parseInt(limit) - 1)
+    query = query.range(offset, to).order("product_name", {ascending: true})
 
-    const { data, error, count } = await query.order("product_name")
+    const { data, error, count } = await query
 
-    if (error) {
-      throw error
-    }
+    if (error) { throw error}
 
     res.json({
       success: true,
       data: data || [],
       pagination: {
-        page: Number.parseInt(page),
-        limit: Number.parseInt(limit),
+        page: parsedPage,
+        limit: parsedLimit,
         total: count || 0,
-        pages: Math.ceil((count || 0) / Number.parseInt(limit)),
+        pages: Math.ceil((count || 0) / parsedlimit),
       },
     })
   } catch (error) {

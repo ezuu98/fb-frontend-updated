@@ -15,7 +15,6 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
   throw new Error("Missing required Supabase environment variables")
 }
 
-// Create Supabase clients
 const supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
@@ -24,14 +23,13 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   },
 })
 
-// Test connection function
 export const connectSupabase = async () => {
   try {
-    const { data, error } = await supabaseAdmin.from("inventory").select("count", { count: "exact", head: true })
+    const { count, error } = await supabaseAdmin
+    .from("inventory")
+    .select("count", { count: "exact", head: true })
 
-    if (error) {
-      throw error
-    }
+    if (error) throw error
 
     console.log("✅ Supabase connection successful")
     return { success: true, message: "Connected to Supabase" }
@@ -367,8 +365,10 @@ export const db = {
   },
 
   // Inventory operations
-  async getInventory(filters = {}) {
+  async getInventory(filters = {}, page = 1, perPage = 100) {
     try {
+      const start = (page - 1) * perPage
+      const end = start + perPage - 1
       let query = supabaseAdmin
         .from("inventory")
         .select(`
@@ -411,7 +411,7 @@ export const db = {
     }
   },
 
-  async getStockMovements(inventoryId, limit = 50) {
+  async getStockMovements(inventoryId, limit = 30) {
     try {
       const { data, error } = await supabaseAdmin
         .from("stock_movements")

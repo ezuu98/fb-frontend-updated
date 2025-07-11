@@ -33,6 +33,7 @@ import { AddProductModal } from "./add-product-modal"
 import { EditProductModal } from "./edit-product-modal"
 import { ExportInventory } from "./export-inventory"
 import { OdooSyncPanel } from "./odoo-sync-panel"
+import { useEffect } from "react"
 
 export function InventoryDashboard() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -42,8 +43,11 @@ export function InventoryDashboard() {
   const [currentView, setCurrentView] = useState<"dashboard" | "sku-detail">("dashboard")
   const [selectedSku, setSelectedSku] = useState<InventoryWithDetails | null>(null)
   const [showOdooSync, setShowOdooSync] = useState(false)
-  const { inventory, loading, error, refetch } = useInventory()
+  const { inventory, totalItems, loading, error, refetch } = useInventory()
   const { user, profile, signOut } = useAuth()
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 100 
+
 
   const handleSkuClick = (item: InventoryWithDetails) => {
     setSelectedSku(item)
@@ -113,6 +117,17 @@ export function InventoryDashboard() {
       return matchesSearch && matchesCategory && matchesStockStatus
     })
   }, [transformedInventory, searchTerm, category, stockStatus])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, category, stockStatus])
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    const end = start + itemsPerPage
+    return filteredData.slice(start, end)
+  }, [filteredData, currentPage])
+
 
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {
@@ -302,60 +317,50 @@ export function InventoryDashboard() {
                   className="pl-10 bg-gray-50 border-gray-200"
                 />
               </div>
+              <div className="flex items-start justify-between mb-6">
+                {/* Filter Dropdowns */}
+                <div className="flex space-x-4">
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Category" />
+                      <ChevronDown className="w-4 h-4" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All Categories">All Categories</SelectItem>
+                      <SelectItem value="Produce">Produce</SelectItem>
+                      <SelectItem value="Bakery">Bakery</SelectItem>
+                      <SelectItem value="Dairy & Eggs">Dairy & Eggs</SelectItem>
+                      <SelectItem value="Meat & Poultry">Meat & Poultry</SelectItem>
+                      <SelectItem value="Beverages">Beverages</SelectItem>
+                      <SelectItem value="Pantry">Pantry</SelectItem>
+                    </SelectContent>
+                  </Select>
 
-              <div className="flex space-x-4">
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Category" />
-                    <ChevronDown className="w-4 h-4" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All Categories">All Categories</SelectItem>
-                    <SelectItem value="Produce">Produce</SelectItem>
-                    <SelectItem value="Bakery">Bakery</SelectItem>
-                    <SelectItem value="Dairy & Eggs">Dairy & Eggs</SelectItem>
-                    <SelectItem value="Meat & Poultry">Meat & Poultry</SelectItem>
-                    <SelectItem value="Beverages">Beverages</SelectItem>
-                    <SelectItem value="Pantry">Pantry</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <Select value={stockStatus} onValueChange={setStockStatus}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Stock Status" />
+                      <ChevronDown className="w-4 h-4" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All Status">All Status</SelectItem>
+                      <SelectItem value="in-stock">In Stock</SelectItem>
+                      <SelectItem value="low-stock">Low Stock</SelectItem>
+                      <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                <Select value={stockStatus} onValueChange={setStockStatus}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Stock Status" />
-                    <ChevronDown className="w-4 h-4" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All Status">All Status</SelectItem>
-                    <SelectItem value="in-stock">In Stock</SelectItem>
-                    <SelectItem value="low-stock">Low Stock</SelectItem>
-                    <SelectItem value="out-of-stock">Out of Stock</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Export Button on the Right */}
+                <ExportInventory
+                  filteredData={filteredData}
+                  searchTerm={searchTerm}
+                  category={category}
+                  stockStatus={stockStatus}
+                />
               </div>
+
             </div>
           </div>
-
-          {/* Action Bar */}
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex space-x-2">
-              <Button variant="outline" size="sm">
-                <Filter className="w-4 h-4 mr-2" />
-                Filter
-              </Button>
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4" />
-              </Button>
-            </div>
-            <ExportInventory
-              filteredData={filteredData}
-              searchTerm={searchTerm}
-              category={category}
-              stockStatus={stockStatus}
-            />
-          </div>
-
-          {/* Inventory Table */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <Table>
               <TableHeader>
@@ -375,7 +380,7 @@ export function InventoryDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredData.map((item, index) => (
+                {paginatedData.map((item, index) => (
                   <TableRow key={index} className="hover:bg-gray-50">
                     <TableCell className="font-mono text-sm text-blue-600">{item.barcode}</TableCell>
                     <TableCell className="font-medium">
@@ -430,6 +435,30 @@ export function InventoryDashboard() {
                 ))}
               </TableBody>
             </Table>
+            <div className="flex justify-between items-center py-4">
+              <div className="text-sm text-gray-600">
+                Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                {Math.min(currentPage * itemsPerPage, filteredData.length)} of { totalItems} entries
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((prev) => prev - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage * itemsPerPage >= filteredData.length}
+                  onClick={() => setCurrentPage((prev) => prev + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </main>

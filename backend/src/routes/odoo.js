@@ -65,7 +65,6 @@ router.post("/sync", async (req, res) => {
     });
 
     const products = response.data.result;
-    console.log(products)
 
     const transformedProducts = products.map(p => ({
       barcode: p.barcode,
@@ -96,7 +95,6 @@ router.post("/sync", async (req, res) => {
 
         const existingItem = await db.findInventoryByOdooId(product.odoo_id);
         if (existingItem) {
-          console.log(`⚠️ Product already exists: ${product.product_name}`);
           continue;
         }
 

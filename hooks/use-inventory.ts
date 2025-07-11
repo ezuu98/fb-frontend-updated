@@ -7,6 +7,9 @@ import type { InventoryWithDetails } from "@/lib/supabase"
 
 export function useInventory() {
   const [inventory, setInventory] = useState<InventoryWithDetails[]>([])
+  const [totalItems, setTotalItems] = useState(0)
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(30)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -14,8 +17,10 @@ export function useInventory() {
     try {
       setLoading(true)
       setError(null)
-      const data = await InventoryAPI.getInventoryWithWarehouses()
-      setInventory(data)
+
+      const result = await InventoryAPI.getInventoryWithWarehouses(page, limit)
+      setInventory(result.data)       // ✅ Inventory list
+      setTotalItems(result.total)     // ✅ Separate state for total
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")
       console.error("Error fetching inventory:", err)
@@ -27,30 +32,26 @@ export function useInventory() {
   useEffect(() => {
     fetchInventory()
 
-    // Set up real-time subscriptions
     const inventoryChannel = supabase
       .channel("inventory_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, (payload) => {
-        console.log("Inventory change:", payload)
-        fetchInventory()
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "warehouse_inventory" }, (payload) => {
-        console.log("Warehouse inventory change:", payload)
-        fetchInventory()
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, fetchInventory)
+      .on("postgres_changes", { event: "*", schema: "public", table: "warehouse_inventory" }, fetchInventory)
       .subscribe()
 
     return () => {
       supabase.removeChannel(inventoryChannel)
     }
-  }, [])
+  }, [page, limit])
 
   const searchInventory = async (query: string) => {
     try {
       setLoading(true)
       setError(null)
-      const data = await InventoryAPI.searchInventory(query)
-      setInventory(data)
+
+      const result = await InventoryAPI.searchInventory(query)
+      setInventory(result.data)
+      setTotalItems(result.total)
+      setPage(1)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed")
     } finally {
@@ -62,8 +63,11 @@ export function useInventory() {
     try {
       setLoading(true)
       setError(null)
-      const data = await InventoryAPI.getLowStockItems()
-      setInventory(data)
+      
+      const result = await InventoryAPI.getLowStockItems(page, limit)
+      setInventory(result.data)
+      setTotalItems(result.total)
+      setPage(1)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to get low stock items")
     } finally {
@@ -73,8 +77,13 @@ export function useInventory() {
 
   return {
     inventory,
+    totalItems,
     loading,
     error,
+    page,
+    setPage,
+    limit,
+    setLimit,
     refetch: fetchInventory,
     searchInventory,
     getLowStockItems,

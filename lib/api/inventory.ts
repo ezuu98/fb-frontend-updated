@@ -3,11 +3,16 @@ import type { InventoryWithDetails, InventoryItem, WarehouseInventory } from "@/
 
 export class InventoryAPI {
   // Get all inventory items with warehouse details
-  static async getInventoryWithWarehouses(): Promise<InventoryWithDetails[]> {
+  static async getInventoryWithWarehouses(page = 1, limit = 100): Promise<{
+    data: InventoryWithDetails[]
+    total: number
+  }> {
     try {
-      console.log("Fetching inventory with warehouses...")
 
-      const { data, error } = await supabase
+      const from = (page - 1) * limit
+      const to = from + limit - 1
+
+      const { data, error, count } = await supabase
         .from("inventory")
         .select(`
           *,
@@ -16,17 +21,17 @@ export class InventoryAPI {
             *,
             warehouse:warehouses(*)
           )
-        `)
+        `, { count: "exact" })
         .eq("is_active", true)
         .order("product_name")
+        .range(from, to)
 
-      if (error) {
-        console.error("Inventory fetch error:", error)
-        throw error
+      if (error) throw error
+
+      return {
+        data: data || [],
+        total: count || 0,
       }
-
-      console.log(`Fetched ${data?.length || 0} inventory items`)
-      return data || []
     } catch (error) {
       console.error("Error in getInventoryWithWarehouses:", error)
       throw error
@@ -145,37 +150,18 @@ export class InventoryAPI {
     }
   }
 
-  // Search inventory
-  static async searchInventory(query: string): Promise<InventoryWithDetails[]> {
-    try {
-      const { data, error } = await supabase
-        .from("inventory")
-        .select(`
-          *,
-          category:categories(*),
-          warehouse_inventory(
-            *,
-            warehouse:warehouses(*)
-          )
-        `)
-        .or(`product_name.ilike.%${query}%,barcode.ilike.%${query}%`)
-        .eq("is_active", true)
-        .order("product_name")
-
-      if (error) throw error
-      return data || []
-    } catch (error) {
-      console.error("Error in searchInventory:", error)
-      throw error
-    }
-  }
-
+  
   // Get low stock items
-  static async getLowStockItems(): Promise<InventoryWithDetails[]> {
-    try {
-      const { data, error } = await supabase
-        .from("inventory")
-        .select(`
+  static async getLowStockItems(page = 1, limit = 30): Promise<{
+    data: InventoryWithDetails[],
+    total: number
+  }> {
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+
+    const { data, count, error } = await supabase
+      .from("inventory")
+      .select(`
           *,
           category:categories(*),
           warehouse_inventory(
@@ -183,19 +169,24 @@ export class InventoryAPI {
             warehouse:warehouses(*)
           )
         `)
-        .eq("is_active", true)
-        .order("product_name")
+      .eq("is_active", true)
+      .range(from, to)
+      .order("product_name")
 
-      if (error) throw error
+    if (error) throw error
 
-      // Filter items where any warehouse has stock below reorder level
-      return (data || []).filter((item) =>
-        item.warehouse_inventory?.some((wh) => wh.current_stock <= item.reorder_level),
+    // Filter items where any warehouse has stock below reorder level
+    const filtered = (data || []).filter((item) =>
+      (item.warehouse_inventory as WarehouseInventory[])?.some(
+        (wh) => wh.current_stock <= item.reorder_level
       )
-    } catch (error) {
-      console.error("Error in getLowStockItems:", error)
-      throw error
+    )
+
+    return {
+      data: filtered,
+      total: filtered.length, 
     }
+
   }
 
   // Check if barcode exists
