@@ -6,7 +6,6 @@ import warehouseRoutes from "./warehouses.js"
 import categoryRoutes from "./categories.js"
 import authRoutes from "./auth.js"
 import odooRoutes from "./odoo.js"
-import { logger } from "../utils/logger.js"
 
 export function setupRoutes(app) {
   const router = express.Router()

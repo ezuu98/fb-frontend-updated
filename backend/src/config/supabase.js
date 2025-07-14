@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+import axios from "axios"
 import dotenv from "dotenv"
 
 dotenv.config()
@@ -24,20 +25,93 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 })
 
 export const connectSupabase = async () => {
-  try {
-    const { count, error } = await supabaseAdmin
-    .from("inventory")
-    .select("count", { count: "exact", head: true })
-
-    if (error) throw error
-
-    console.log("✅ Supabase connection successful")
-    return { success: true, message: "Connected to Supabase" }
-  } catch (error) {
-    console.error("❌ Supabase connection failed:", error.message)
-    return { success: false, message: error.message }
+  async function fetchOdooInventory() {
+    const requestData = {
+      jsonrpc: '2.0',
+      method: 'call',
+      params: {
+        service: 'object',
+        method: 'execute_kw',
+        args: [
+          process.env.ODOO_DB,
+          6,
+          process.env.ODOO_PASSWORD,
+          'product.product',
+          'search_read',
+          [],
+          {
+            fields: ['barcode', 'qty_available'],
+          }          
+        ]
+      },
+      id: 1
+    }
+    const response = await axios.post(process.env.ODOO_URL, requestData)
+    return response.data.result
   }
+
+  // Update quantity in Supabase by barcode
+  async function updateSupabaseQuantities(odooItems) {
+    for (const item of odooItems) {
+      if (!item.barcode) {
+        console.warn("Skipping item without barcode:", item)
+        continue
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('inventory')
+        .update({ quantity_available: item.qty_available })
+        .eq('barcode', (item.barcode))
+        .select()
+
+
+      if (error) {
+        console.error(`❌ Failed to update barcode ${item.barcode}:`, error.message)
+      } 
+      if (!data || data.length === 0) {
+        console.warn(`⚠️ No match in Supabase for barcode: ${item.barcode}`)
+      }
+      
+    }
+  }
+
+  // Sync function
+  async function syncInventory() {
+    try {
+      const odooData = await fetchOdooInventory()
+      if (!Array.isArray(odooData)) {
+        console.error("❌ Invalid Odoo data:", odooData)
+        throw new Error("Odoo response is not an array")
+      }
+
+      await updateSupabaseQuantities(odooData)
+      console.log('✅ Inventory sync complete')
+    } catch (err) {
+      console.error('❌ Error syncing inventory:', err)
+    }
+  }
+
+  syncInventory()
 }
+
+
+
+
+
+// try {
+//   const { count, error } = await supabaseAdmin
+//   .from("inventory")
+//   .select("count", { count: "exact", head: true })
+
+//   if (error) throw error
+
+//   console.log("✅ Supabase connection successful")
+//   return { success: true, message: "Connected to Supabase" }
+// } catch (error) {
+//   console.error("❌ Supabase connection failed:", error.message)
+//   return { success: false, message: error.message }
+// }
+
 
 // Database helper object
 export const db = {

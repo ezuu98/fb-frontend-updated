@@ -45,9 +45,8 @@ export function InventoryDashboard() {
   const [showOdooSync, setShowOdooSync] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 30
-  const { inventory, totalItems, loading, error, refetch, searchInventory, getLowStockItems, setPage, page } = useInventory(currentPage, itemsPerPage)
+  const { inventory, totalItems, loading, error, lowStockCount, outOfStockCount, refetch, searchInventory, getLowStockItems, setPage, page } = useInventory(currentPage, itemsPerPage)
   const { user, profile, signOut } = useAuth()
-
 
   const handleSkuClick = (item: InventoryWithDetails) => {
     setSelectedSku(item)
@@ -62,6 +61,8 @@ export function InventoryDashboard() {
   const handleLogout = async () => {
     await signOut()
   }
+
+
 
   // Transform Supabase data for display
   const transformedInventory = useMemo(() => {
@@ -104,15 +105,16 @@ export function InventoryDashboard() {
   const filteredData = useMemo(() => {
     return transformedInventory.filter((item) => {
       const matchesSearch =
-        item.product.toLowerCase().includes(searchTerm.toLowerCase()) || item.barcode.includes(searchTerm)
+        item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.barcode.includes(searchTerm)
 
       const matchesCategory = category === "All Categories" || item.category === category
 
       const matchesStockStatus =
         stockStatus === "All Status" ||
         (stockStatus === "in-stock" && item.totalStock > item.reorderLevel) ||
-        (stockStatus === "low-stock" && item.totalStock <= item.reorderLevel && item.totalStock > 0) ||
-        (stockStatus === "out-of-stock" && item.totalStock === 0)
+        (stockStatus === "low-stock" ? true : // skip filtering, already handled
+        stockStatus === "out-of-stock" && item.totalStock === 0)
 
       return matchesSearch && matchesCategory && matchesStockStatus
     })
@@ -121,14 +123,20 @@ export function InventoryDashboard() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, category, stockStatus])
+  useEffect(() => {
+    if (stockStatus === "low-stock") {
+      getLowStockItems()
+    } else {
+      refetch()
+    }
+  }, [stockStatus])
+
 
   const paginatedData = filteredData
 
 
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {
-    const lowStockItems = transformedInventory.filter((item) => item.isLowStock).length
-    const outOfStockItems = transformedInventory.filter((item) => item.totalStock === 0).length
     const totalValue = transformedInventory.reduce((sum, item) => {
       const unitCost = item.originalData.unit_cost || 0
       return sum + item.totalStock * unitCost
@@ -136,8 +144,8 @@ export function InventoryDashboard() {
 
     return {
       totalProducts: totalItems,
-      lowStockItems,
-      outOfStockItems,
+      // lowStockItems,
+      //outOfStockItems,
       totalValue,
     }
   }, [transformedInventory])
@@ -278,7 +286,7 @@ export function InventoryDashboard() {
                 <AlertTriangle className="h-4 w-4 text-orange-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600">{dashboardStats.lowStockItems}</div>
+                <div className="text-2xl font-bold text-orange-600">{lowStockCount}</div>
               </CardContent>
             </Card>
             <Card>
@@ -287,7 +295,7 @@ export function InventoryDashboard() {
                 <AlertTriangle className="h-4 w-4 text-red-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">{dashboardStats.outOfStockItems}</div>
+                <div className="text-2xl font-bold text-red-600">{outOfStockCount}</div>
               </CardContent>
             </Card>
             <Card>

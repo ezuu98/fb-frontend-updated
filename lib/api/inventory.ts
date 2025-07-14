@@ -3,7 +3,7 @@ import type { InventoryWithDetails, InventoryItem, WarehouseInventory } from "@/
 
 export class InventoryAPI {
   // Get all inventory items with warehouse details
-  static async getInventoryWithWarehouses(page = 1, limit = 100): Promise<{
+  static async getInventoryWithWarehouses(page = 1, limit = 30): Promise<{
     data: InventoryWithDetails[]
     total: number
   }> {
@@ -38,13 +38,13 @@ export class InventoryAPI {
     }
   }
   static async searchInventory(query: string): Promise<{
-  data: InventoryWithDetails[]
-  total: number
-}> {
-  try {
-    const { data, error, count } = await supabase
-      .from("inventory")
-      .select(`
+    data: InventoryWithDetails[]
+    total: number
+  }> {
+    try {
+      const { data, error, count } = await supabase
+        .from("inventory")
+        .select(`
         *,
         category:categories(*),
         warehouse_inventory(
@@ -52,20 +52,20 @@ export class InventoryAPI {
           warehouse:warehouses(*)
         )
       `, { count: "exact" })
-      .ilike("product_name", `%${query}%`) // Or any column you want to search
-      .eq("is_active", true)
+        .ilike("product_name", `%${query}%`) // Or any column you want to search
+        .eq("is_active", true)
 
-    if (error) throw error
+      if (error) throw error
 
-    return {
-      data: data || [],
-      total: count || 0,
+      return {
+        data: data || [],
+        total: count || 0,
+      }
+    } catch (error) {
+      console.error("Error in searchInventory:", error)
+      throw error
     }
-  } catch (error) {
-    console.error("Error in searchInventory:", error)
-    throw error
   }
-}
 
 
   // Get single inventory item with details
@@ -180,43 +180,40 @@ export class InventoryAPI {
     }
   }
 
-  
+
   // Get low stock items
   static async getLowStockItems(page = 1, limit = 30): Promise<{
     data: InventoryWithDetails[],
     total: number
   }> {
-    const from = (page - 1) * limit
-    const to = from + limit - 1
+    try {
+      const from = (page - 1) * limit
+      const to = from + limit - 1
 
-    const { data, count, error } = await supabase
-      .from("inventory")
-      .select(`
+      const { data, count, error } = await supabase
+        .from("inventory")
+        .select(`
           *,
           category:categories(*),
           warehouse_inventory(
             *,
             warehouse:warehouses(*)
           )
-        `)
-      .eq("is_active", true)
-      .range(from, to)
-      .order("product_name")
+        `, { count: "exact" })
+        .eq("is_active", true)
+        .range(from, to)
+        .order("product_name")
 
-    if (error) throw error
+      if (error) throw error
 
-    // Filter items where any warehouse has stock below reorder level
-    const filtered = (data || []).filter((item) =>
-      (item.warehouse_inventory as WarehouseInventory[])?.some(
-        (wh) => wh.current_stock <= item.reorder_level
-      )
-    )
-
-    return {
-      data: filtered,
-      total: filtered.length, 
+      return {
+        data: data || [],
+        total: count || 0
+      }
+    } catch (error) {
+      console.error("Error in getLowStock:", error);
+      throw error;
     }
-
   }
 
   // Check if barcode exists
@@ -234,4 +231,33 @@ export class InventoryAPI {
       return false
     }
   }
+
+  static async lowStockCount(): Promise<{
+    lowStockCount: number
+    outOfStockCount: number
+  }> {
+    try {
+      // Fetch only necessary fields
+      const { data, error } = await supabase
+        .from("inventory")
+        .select("id, quantity_available, reorder_level")
+        .eq("is_active", true)
+
+      if (error) throw error
+
+      // Filter for low stock and out of stock
+      const lowStockItems = data?.filter(item => item.quantity_available < item.reorder_level)
+      const outOfStockItems = data?.filter(item => item.quantity_available === 0)
+
+      return {
+        lowStockCount: lowStockItems?.length || 0,
+        outOfStockCount: outOfStockItems?.length || 0,
+      }
+    } catch (error) {
+      console.error("Error in lowStockCount:", error)
+      throw error
+    }
+  }
+
+
 }

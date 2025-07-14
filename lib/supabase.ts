@@ -46,6 +46,7 @@ export interface InventoryItem {
   unit_of_measure: string
   unit_cost?: number
   selling_price?: number
+  qty_available:number
   reorder_level: number
   max_stock_level?: number
   is_active: boolean

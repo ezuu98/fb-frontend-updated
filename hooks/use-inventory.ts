@@ -12,6 +12,9 @@ export function useInventory(initialPage = 1, initialLimit = 30) {
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(initialPage)
   const [limit, setLimit] = useState(initialLimit)
+  const [lowStockCount, setLowStockCount] = useState(0)
+  const [outOfStockCount, setOutOfStockCount] = useState(0)
+
 
 
   const from = (page - 1) * limit
@@ -33,8 +36,21 @@ export function useInventory(initialPage = 1, initialLimit = 30) {
     }
   }
 
+  const fetchStockCounts = async () => {
+    try {
+      const response = await InventoryAPI.lowStockCount()
+      console.log("✅ Stock counts fetched:", response)
+
+      setLowStockCount(response.lowStockCount)
+      setOutOfStockCount(response.outOfStockCount)
+    } catch (err) {
+      console.error("Error fetching stock counts:", err)
+    }
+  }
+
   useEffect(() => {
     fetchInventory()
+    fetchStockCounts()
 
     const inventoryChannel = supabase
       .channel("inventory_changes")
@@ -67,7 +83,7 @@ export function useInventory(initialPage = 1, initialLimit = 30) {
     try {
       setLoading(true)
       setError(null)
-      
+
       const result = await InventoryAPI.getLowStockItems(page, limit)
       setInventory(result.data)
       setTotalItems(result.total)
@@ -77,6 +93,8 @@ export function useInventory(initialPage = 1, initialLimit = 30) {
     } finally {
       setLoading(false)
     }
+
+    
   }
 
   return {
@@ -91,5 +109,7 @@ export function useInventory(initialPage = 1, initialLimit = 30) {
     refetch: fetchInventory,
     searchInventory,
     getLowStockItems,
+    lowStockCount,
+    outOfStockCount
   }
 }
