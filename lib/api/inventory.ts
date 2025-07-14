@@ -237,27 +237,20 @@ export class InventoryAPI {
     outOfStockCount: number
   }> {
     try {
-      // Fetch only necessary fields
-      const { data, error } = await supabase
-        .from("inventory")
-        .select("id, quantity_available, reorder_level")
-        .eq("is_active", true)
+      const { data, error } = await supabase.rpc("get_low_stock_count")
 
       if (error) throw error
 
-      // Filter for low stock and out of stock
-      const lowStockItems = data?.filter(item => item.quantity_available < item.reorder_level)
-      const outOfStockItems = data?.filter(item => item.quantity_available === 0)
+      const { low_stock_count, out_of_stock_count } = data[0] || {}
 
       return {
-        lowStockCount: lowStockItems?.length || 0,
-        outOfStockCount: outOfStockItems?.length || 0,
+        lowStockCount: low_stock_count || 0,
+        outOfStockCount: out_of_stock_count || 0,
       }
     } catch (error) {
       console.error("Error in lowStockCount:", error)
       throw error
     }
   }
-
 
 }

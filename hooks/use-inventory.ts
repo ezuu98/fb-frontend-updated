@@ -39,8 +39,6 @@ export function useInventory(initialPage = 1, initialLimit = 30) {
   const fetchStockCounts = async () => {
     try {
       const response = await InventoryAPI.lowStockCount()
-      console.log("✅ Stock counts fetched:", response)
-
       setLowStockCount(response.lowStockCount)
       setOutOfStockCount(response.outOfStockCount)
     } catch (err) {
