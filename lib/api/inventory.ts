@@ -232,6 +232,8 @@ export class InventoryAPI {
     }
   }
 
+  
+
   static async lowStockCount(): Promise<{
     lowStockCount: number
     outOfStockCount: number

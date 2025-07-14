@@ -18,9 +18,7 @@ export default function Home() {
     )
   }
 
-  if (!user) {
-    return <LoginPage />
-  }
+  if (!user) { return <LoginPage /> }
 
   return <InventoryDashboard />
 }

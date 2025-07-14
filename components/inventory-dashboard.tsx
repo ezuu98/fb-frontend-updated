@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, Filter, Download, ChevronDown, User, LogOut, AlertTriangle, Edit, Database } from "lucide-react"
+import { Search, ChevronDown, User, LogOut, AlertTriangle, Edit, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -62,8 +62,6 @@ export function InventoryDashboard() {
     await signOut()
   }
 
-
-
   // Transform Supabase data for display
   const transformedInventory = useMemo(() => {
     return inventory.map((item) => {
@@ -102,6 +100,12 @@ export function InventoryDashboard() {
     })
   }, [inventory])
 
+  // Get unique categories from the data
+  const availableCategories = useMemo(() => {
+    const categories = new Set(transformedInventory.map(item => item.category))
+    return Array.from(categories).sort()
+  }, [transformedInventory])
+
   const filteredData = useMemo(() => {
     return transformedInventory.filter((item) => {
       const matchesSearch =
@@ -113,8 +117,8 @@ export function InventoryDashboard() {
       const matchesStockStatus =
         stockStatus === "All Status" ||
         (stockStatus === "in-stock" && item.totalStock > item.reorderLevel) ||
-        (stockStatus === "low-stock" ? true : // skip filtering, already handled
-        stockStatus === "out-of-stock" && item.totalStock === 0)
+        (stockStatus === "low-stock" && item.isLowStock && item.totalStock > 0) ||
+        (stockStatus === "out-of-stock" && item.totalStock === 0)
 
       return matchesSearch && matchesCategory && matchesStockStatus
     })
@@ -123,6 +127,7 @@ export function InventoryDashboard() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, category, stockStatus])
+  
   useEffect(() => {
     if (stockStatus === "low-stock") {
       getLowStockItems()
@@ -131,9 +136,7 @@ export function InventoryDashboard() {
     }
   }, [stockStatus])
 
-
   const paginatedData = filteredData
-
 
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {
@@ -144,11 +147,10 @@ export function InventoryDashboard() {
 
     return {
       totalProducts: totalItems,
-      // lowStockItems,
-      //outOfStockItems,
       totalValue,
     }
-  }, [transformedInventory])
+  }, [transformedInventory, totalItems])
+
   if (currentView === "sku-detail" && selectedSku) {
     return <SkuDetailView sku={selectedSku} onBack={handleBackToDashboard} />
   }
@@ -330,12 +332,11 @@ export function InventoryDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All Categories">All Categories</SelectItem>
-                      <SelectItem value="Produce">Produce</SelectItem>
-                      <SelectItem value="Bakery">Bakery</SelectItem>
-                      <SelectItem value="Dairy & Eggs">Dairy & Eggs</SelectItem>
-                      <SelectItem value="Meat & Poultry">Meat & Poultry</SelectItem>
-                      <SelectItem value="Beverages">Beverages</SelectItem>
-                      <SelectItem value="Pantry">Pantry</SelectItem>
+                      {availableCategories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
 
@@ -361,9 +362,9 @@ export function InventoryDashboard() {
                   stockStatus={stockStatus}
                 />
               </div>
-
             </div>
           </div>
+
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <Table>
               <TableHeader>
@@ -371,7 +372,6 @@ export function InventoryDashboard() {
                   <TableHead className="font-medium text-gray-700">Barcode</TableHead>
                   <TableHead className="font-medium text-gray-700">Product</TableHead>
                   <TableHead className="font-medium text-gray-700">Category</TableHead>
-                  <TableHead className="font-medium text-gray-700">Sub Category</TableHead>
                   <TableHead className="font-medium text-gray-700 text-center">BDRWH</TableHead>
                   <TableHead className="font-medium text-gray-700 text-center">MHOWH</TableHead>
                   <TableHead className="font-medium text-gray-700 text-center">SBZWH</TableHead>
@@ -389,18 +389,14 @@ export function InventoryDashboard() {
                     <TableCell className="font-medium">
                       <button
                         onClick={() => handleSkuClick(item.originalData)}
-                        className="text-blue-600 hover:text-blue-800 hover:underline text-left"                      >
+                        className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                      >
                         {item.product}
                       </button>
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {item.category}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {item.subCategory}
                       </span>
                     </TableCell>
                     <TableCell className="text-center">{item.bdrwh}</TableCell>
