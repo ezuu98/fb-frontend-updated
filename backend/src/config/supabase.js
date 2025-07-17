@@ -60,7 +60,7 @@ export const connectSupabase = async () => {
 
       const { data, error } = await supabaseAdmin
         .from('inventory')
-        .update({ quantity_available: item.qty_available })
+        .update({ qty_available: item.qty_available })
         .eq('barcode', (item.barcode))
         .select()
 

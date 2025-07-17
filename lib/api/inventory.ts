@@ -22,8 +22,9 @@ export class InventoryAPI {
             warehouse:warehouses(*)
           )
         `, { count: "exact" })
-        .eq("is_active", true)
-        .order("product_name", { ascending: true })
+        .eq("active", true)
+        .eq("type","product")
+        .order("name", { ascending: true })
         .range(from, to)
 
       if (error) throw error
@@ -37,6 +38,7 @@ export class InventoryAPI {
       throw error
     }
   }
+  
   static async searchInventory(query: string): Promise<{
     data: InventoryWithDetails[]
     total: number
@@ -52,8 +54,8 @@ export class InventoryAPI {
           warehouse:warehouses(*)
         )
       `, { count: "exact" })
-        .ilike("product_name", `%${query}%`) // Or any column you want to search
-        .eq("is_active", true)
+        .ilike("name", `%${query}%`) // Or any column you want to search
+        .eq("active", true)
 
       if (error) throw error
 
@@ -82,7 +84,7 @@ export class InventoryAPI {
           )
         `)
         .eq("id", id)
-        .eq("is_active", true)
+        .eq("active", true)
         .single()
 
       if (error) throw error
@@ -202,7 +204,7 @@ export class InventoryAPI {
         `, { count: "exact" })
         .eq("is_active", true)
         .range(from, to)
-        .order("product_name")
+        .order("name")
 
       if (error) throw error
 

@@ -39,17 +39,17 @@ export interface Category {
 export interface InventoryItem {
   id: string
   barcode: string
-  product_name: string
+  name: string
   description?: string
-  category_id?: string
-  sub_category?: string
-  unit_of_measure: string
-  unit_cost?: number
-  selling_price?: number
+  categ_id?: string
+  uom_name: string
+  standard_price?: number
+  sale_avg_price?: number
+  purchase_avg_price?: number
   qty_available:number
-  reorder_level: number
-  max_stock_level?: number
-  is_active: boolean
+  reordering_min_qty: number
+  reordering_max_qty: number
+  active: boolean
   created_by?: string
   created_at: string
   updated_at: string

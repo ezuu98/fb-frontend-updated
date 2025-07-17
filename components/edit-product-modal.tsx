@@ -63,15 +63,14 @@ export function EditProductModal({ product, onProductUpdated, trigger }: EditPro
 
   // Product form data
   const [formData, setFormData] = useState({
-    product_name: product.product_name,
+    product_name: product.name,
     description: product.description || "",
-    category_id: product.category_id || "",
-    sub_category: product.sub_category || "",
-    unit_of_measure: product.unit_of_measure,
-    unit_cost: product.unit_cost?.toString() || "",
-    selling_price: product.selling_price?.toString() || "",
-    reorder_level: product.reorder_level.toString(),
-    max_stock_level: product.max_stock_level?.toString() || "",
+    category_id: product.categ_id || "",
+    unit_of_measure: product.uom_name,
+    unit_cost: product.standard_price?.toString() || "",
+    selling_price: product.sale_avg_price?.toString() || "",
+    reorder_level: product.reordering_min_qty.toString(),
+    max_stock_level: product.reordering_max_qty?.toString() || "",
   })
 
   // Load data when modal opens
@@ -273,7 +272,7 @@ export function EditProductModal({ product, onProductUpdated, trigger }: EditPro
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Product: {product.product_name}</DialogTitle>
+          <DialogTitle>Edit Product: {product.name}</DialogTitle>
           <DialogDescription>
             Update product information, pricing, and view detailed stock calculations.
           </DialogDescription>
@@ -349,14 +348,6 @@ export function EditProductModal({ product, onProductUpdated, trigger }: EditPro
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sub_category">Sub Category</Label>
-                    <Input
-                      id="sub_category"
-                      value={formData.sub_category}
-                      onChange={(e) => handleInputChange("sub_category", e.target.value)}
-                    />
                   </div>
                 </div>
 

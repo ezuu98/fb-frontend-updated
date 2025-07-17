@@ -78,14 +78,13 @@ export function InventoryDashboard() {
         ) || {}
 
       const totalStock = item.warehouse_inventory?.reduce((sum, wh) => sum + wh.current_stock, 0) || 0
-      const isLowStock = totalStock <= item.reorder_level
+      const isLowStock = totalStock <= item.reordering_min_qty
 
       return {
         id: item.id,
         barcode: item.barcode,
-        product: item.product_name,
+        product: item.name,
         category: item.category?.name || "Uncategorized",
-        subCategory: item.sub_category || "",
         bdrwh: warehouseData.bdrwh || 0,
         mhowh: warehouseData.mhowh || 0,
         sbzwh: warehouseData.sbzwh || 0,
@@ -94,7 +93,7 @@ export function InventoryDashboard() {
         ecmm: warehouseData.ecmm || 0,
         totalStock,
         isLowStock,
-        reorderLevel: item.reorder_level,
+        reorderLevel: item.reordering_min_qty,
         originalData: item,
       }
     })
@@ -141,7 +140,7 @@ export function InventoryDashboard() {
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {
     const totalValue = transformedInventory.reduce((sum, item) => {
-      const unitCost = item.originalData.unit_cost || 0
+      const unitCost = item.originalData.standard_price || 0
       return sum + item.totalStock * unitCost
     }, 0)
 

@@ -104,13 +104,13 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
           {/* SKU Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">SKU: {sku.product_name}</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">SKU: {sku.name}</h1>
             <div className="flex items-center space-x-4 text-sm text-gray-600">
               <span>Barcode: {sku.barcode}</span>
               <span>•</span>
               <span>Category: {sku.category?.name || "Uncategorized"}</span>
               <span>•</span>
-              <span>Reorder Level: {sku.reorder_level}</span>
+              <span>Reorder Level: {sku.reordering_min_qty}</span>
             </div>
             <p className="text-gray-600 mt-2">Real-time inventory levels across all warehouse locations</p>
           </div>
@@ -170,7 +170,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Product Name:</span>
-                  <span className="font-medium">{sku.product_name}</span>
+                  <span className="font-medium">{sku.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Barcode:</span>
@@ -181,12 +181,8 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                   <span>{sku.category?.name || "Uncategorized"}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Sub Category:</span>
-                  <span>{sku.sub_category || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-gray-600">Unit of Measure:</span>
-                  <span>{sku.unit_of_measure}</span>
+                  <span>{sku.uom_name}</span>
                 </div>
               </div>
             </div>
@@ -196,24 +192,24 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Unit Cost:</span>
-                  <span className="font-medium">£{sku.unit_cost?.toFixed(2) || "N/A"}</span>
+                  <span className="font-medium">£{sku.standard_price?.toFixed(2) || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Selling Price:</span>
-                  <span className="font-medium">£{sku.selling_price?.toFixed(2) || "N/A"}</span>
+                  <span className="font-medium">£{sku.sale_avg_price?.toFixed(2) || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Reorder Level:</span>
-                  <span className="font-medium">{sku.reorder_level}</span>
+                  <span className="font-medium">{sku.reordering_min_qty}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Max Stock Level:</span>
-                  <span className="font-medium">{sku.max_stock_level || "N/A"}</span>
+                  <span className="font-medium">{sku.reordering_max_qty || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Stock Value:</span>
                   <span className="font-medium text-green-600">
-                    £{((sku.unit_cost || 0) * totalRow.currentStock).toFixed(2)}
+                    £{((sku.standard_price || 0) * totalRow.currentStock).toFixed(2)}
                   </span>
                 </div>
               </div>
