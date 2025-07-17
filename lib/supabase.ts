@@ -16,6 +16,13 @@ export interface Profile {
   updated_at: string
 }
 
+export interface QuantityEntry {
+  barcode: string
+  warehouse_code: string
+  quantity: number
+}
+
+
 export interface Warehouse {
   id: string
   code: string
@@ -136,6 +143,10 @@ export interface PurchaseOrderItem {
 export interface InventoryWithDetails extends InventoryItem {
   category: Category
   warehouse_inventory: (WarehouseInventory & { warehouse: Warehouse })[]
+  odoo_id: number | string
+  barcode: string
+  warehouse_code: string
+  quantity: number
 }
 
 export interface DashboardStats {

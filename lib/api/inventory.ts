@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase-client"
-import type { InventoryWithDetails, InventoryItem, WarehouseInventory } from "@/lib/supabase"
+import type { InventoryWithDetails, InventoryItem, WarehouseInventory, QuantityEntry } from "@/lib/supabase"
 
 export class InventoryAPI {
   // Get all inventory items with warehouse details
@@ -240,7 +240,7 @@ export class InventoryAPI {
   }
 
   static async getTotalQuantityPerProduct() {
-    const { data, error } = await supabase.rpc('get_total_quantity_per_product');
+    const { data, error } = await supabase.rpc('get_dash_details');
 
     if (error) {
       console.error("❌ Error calling Supabase function:", error.message);

@@ -47,12 +47,11 @@ export function InventoryDashboard() {
   const itemsPerPage = 30
   const { inventory, totalItems, loading, error, lowStockCount, outOfStockCount, refetch, searchInventory, getLowStockItems, setPage, page, totalQuantityPerProduct } = useInventory(currentPage, itemsPerPage)
   const { user, profile, signOut } = useAuth()
-
+  
   const handleSkuClick = (item: InventoryWithDetails) => {
     setSelectedSku(item)
     setCurrentView("sku-detail")
   }
-
   const handleBackToDashboard = () => {
     setCurrentView("dashboard")
     setSelectedSku(null)
@@ -64,9 +63,8 @@ export function InventoryDashboard() {
 
   // Transform Supabase data for display
   const transformedInventory = useMemo(() => {
-    return inventory.map((item) => {
-      const warehouseStock = item.warehouse_inventory || [];
 
+    return inventory.map((item) => {
       const warehouseMap: Record<string, number> = {
         bdrwh: 0,
         mhowh: 0,
@@ -74,17 +72,36 @@ export function InventoryDashboard() {
         cliwh: 0,
         bhdwh: 0,
         ecmm: 0,
-      }
-      for (const wh of warehouseStock) {
-        const key = wh.warehouse?.code?.toLowerCase(); // assuming you have `code` like 'BDRWH', etc.
-        if (key && warehouseMap.hasOwnProperty(key)) {
-          warehouseMap[key] = wh.current_stock;
+      };
+
+      const validWarehouseCodes = Object.keys(warehouseMap);
+      
+      item.warehouse_inventory?.forEach((wh) => {
+        const whCode = wh.warehouse?.code?.toLowerCase();
+        const barcode = item.barcode;
+        console.log("sadiq3")
+
+        
+        if (whCode && validWarehouseCodes.includes(whCode)) {
+          // Find the matching entry in totalQuantityPerProduct
+          const match = totalQuantityPerProduct?.find(
+            (entry) =>
+              entry.barcode === barcode &&
+              entry.warehouse_code?.toLowerCase() === whCode
+          );
+          console.log("Sadiq 2")
+
+          if (match) {
+            warehouseMap[whCode] = match.quantity;
+            console.log("Sadiq")
+            console.log(match.quantity)
+          }
         }
-      }
+      });;  
 
-      const totalStock = warehouseStock.reduce((sum, wh) => sum + wh.current_stock, 0);
+
+      const totalStock = Object.values(warehouseMap).reduce((sum, qty) => sum + qty, 0);
       const isLowStock = totalStock <= item.reordering_min_qty;
-
       return {
         id: item.id,
         barcode: item.barcode,
@@ -100,9 +117,10 @@ export function InventoryDashboard() {
         isLowStock,
         reorderLevel: item.reordering_min_qty,
         originalData: item,
-      }
-    })
-  }, [inventory])
+        
+      };
+    });
+  }, [inventory, totalQuantityPerProduct]);
 
   // Get unique categories from the data
   const availableCategories = useMemo(() => {
@@ -470,3 +488,5 @@ export function InventoryDashboard() {
     </div>
   )
 }
+
+

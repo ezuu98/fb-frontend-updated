@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase-client"
 import { InventoryAPI } from "@/lib/api/inventory"
-import type { InventoryWithDetails } from "@/lib/supabase"
+import type { InventoryWithDetails, QuantityEntry } from "@/lib/supabase"
 
 export function useInventory(initialPage = 1, initialLimit = 30) {
   const [inventory, setInventory] = useState<InventoryWithDetails[]>([])
@@ -14,21 +14,21 @@ export function useInventory(initialPage = 1, initialLimit = 30) {
   const [limit, setLimit] = useState(initialLimit)
   const [lowStockCount, setLowStockCount] = useState(0)
   const [outOfStockCount, setOutOfStockCount] = useState(0)
-  const [totalQuantityPerProduct, setTotalQuantityPerProduct] = useState<any[]>([])
-  
+  const [totalQuantityPerProduct, setTotalQuantityPerProduct] = useState<QuantityEntry[]>([])
+
+
   const from = (page - 1) * limit
   const to = from + limit - 1
-  
-  
+
   const fetchTotalQuantityPerProduct = async () => {
-  try {
-    const result = await InventoryAPI.getTotalQuantityPerProduct()
-    setTotalQuantityPerProduct(result)
-  } catch (err) {
-    console.error("Error fetching total quantity per product:", err)
+    try {
+      const result: QuantityEntry[] = await InventoryAPI.getTotalQuantityPerProduct()
+      setTotalQuantityPerProduct(result)
+    } catch (err) {
+      console.error("Error fetching total quantity per product:", err)
+    }
   }
-}
-  
+
   const fetchInventory = async () => {
     try {
       setLoading(true)
@@ -102,7 +102,7 @@ export function useInventory(initialPage = 1, initialLimit = 30) {
       setLoading(false)
     }
 
-    
+
   }
 
   return {
