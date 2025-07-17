@@ -45,7 +45,7 @@ export function InventoryDashboard() {
   const [showOdooSync, setShowOdooSync] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 30
-  const { inventory, totalItems, loading, error, lowStockCount, outOfStockCount, refetch, searchInventory, getLowStockItems, setPage, page } = useInventory(currentPage, itemsPerPage)
+  const { inventory, totalItems, loading, error, lowStockCount, outOfStockCount, refetch, searchInventory, getLowStockItems, setPage, page, totalQuantityPerProduct } = useInventory(currentPage, itemsPerPage)
   const { user, profile, signOut } = useAuth()
 
   const handleSkuClick = (item: InventoryWithDetails) => {
@@ -65,32 +65,37 @@ export function InventoryDashboard() {
   // Transform Supabase data for display
   const transformedInventory = useMemo(() => {
     return inventory.map((item) => {
-      const warehouseData =
-        item.warehouse_inventory?.reduce(
-          (acc, wh) => {
-            const code = wh.warehouse?.code?.toLowerCase()
-            if (code) {
-              acc[code] = wh.current_stock
-            }
-            return acc
-          },
-          {} as Record<string, number>,
-        ) || {}
+      const warehouseStock = item.warehouse_inventory || [];
 
-      const totalStock = item.warehouse_inventory?.reduce((sum, wh) => sum + wh.current_stock, 0) || 0
-      const isLowStock = totalStock <= item.reordering_min_qty
+      const warehouseMap: Record<string, number> = {
+        bdrwh: 0,
+        mhowh: 0,
+        sbzwh: 0,
+        cliwh: 0,
+        bhdwh: 0,
+        ecmm: 0,
+      }
+      for (const wh of warehouseStock) {
+        const key = wh.warehouse?.code?.toLowerCase(); // assuming you have `code` like 'BDRWH', etc.
+        if (key && warehouseMap.hasOwnProperty(key)) {
+          warehouseMap[key] = wh.current_stock;
+        }
+      }
+
+      const totalStock = warehouseStock.reduce((sum, wh) => sum + wh.current_stock, 0);
+      const isLowStock = totalStock <= item.reordering_min_qty;
 
       return {
         id: item.id,
         barcode: item.barcode,
         product: item.name,
-        category: item.category?.name || "Uncategorized",
-        bdrwh: warehouseData.bdrwh || 0,
-        mhowh: warehouseData.mhowh || 0,
-        sbzwh: warehouseData.sbzwh || 0,
-        cliwh: warehouseData.cliwh || 0,
-        bhdwh: warehouseData.bhdwh || 0,
-        ecmm: warehouseData.ecmm || 0,
+        category: item.category?.name,
+        bdrwh: warehouseMap.bdrwh,
+        mhowh: warehouseMap.mhowh,
+        sbzwh: warehouseMap.sbzwh,
+        cliwh: warehouseMap.cliwh,
+        bhdwh: warehouseMap.bhdwh,
+        ecmm: warehouseMap.ecmm,
         totalStock,
         isLowStock,
         reorderLevel: item.reordering_min_qty,
@@ -126,7 +131,7 @@ export function InventoryDashboard() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, category, stockStatus])
-  
+
   useEffect(() => {
     if (stockStatus === "low-stock") {
       getLowStockItems()

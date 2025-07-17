@@ -20,17 +20,19 @@ export interface Warehouse {
   id: string
   code: string
   name: string
-  location?: string
+  view_location_id?: string
   manager_id?: string
-  is_active: boolean
+  active: boolean
   created_at: string
   updated_at: string
+  low_stock_id:string
+  display_name:string
 }
 
 export interface Category {
   id: string
   name: string
-  description?: string
+  complete_name?: string
   parent_id?: string
   is_active: boolean
   created_at: string

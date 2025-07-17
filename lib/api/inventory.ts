@@ -23,7 +23,7 @@ export class InventoryAPI {
           )
         `, { count: "exact" })
         .eq("active", true)
-        .eq("type","product")
+        .eq("type", "product")
         .order("name", { ascending: true })
         .range(from, to)
 
@@ -38,7 +38,7 @@ export class InventoryAPI {
       throw error
     }
   }
-  
+
   static async searchInventory(query: string): Promise<{
     data: InventoryWithDetails[]
     total: number
@@ -202,12 +202,11 @@ export class InventoryAPI {
             warehouse:warehouses(*)
           )
         `, { count: "exact" })
-        .eq("is_active", true)
+        .eq("active", true)
         .range(from, to)
         .order("name")
 
       if (error) throw error
-
       return {
         data: data || [],
         total: count || 0
@@ -234,7 +233,7 @@ export class InventoryAPI {
     }
   }
 
-  
+
 
   static async lowStockCount(): Promise<{
     lowStockCount: number
@@ -256,5 +255,23 @@ export class InventoryAPI {
       throw error
     }
   }
+
+  static async getTotalQuantityPerProduct(): Promise<any[]> {
+    try {
+      const { data, error } = await supabase.rpc("get_product_quantities_by_warehouse");
+
+      if (error) {
+        console.error("❌ Error calling Supabase function:", error.message);
+        throw error;
+      }
+
+      console.log("✅ Aggregated stock:", data);
+      return data;
+    } catch (error) {
+      console.error("Error in getTotalQuantityPerProduct:", error);
+      throw error;
+    }
+  }
+
 
 }
