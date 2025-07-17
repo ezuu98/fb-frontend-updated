@@ -16,11 +16,7 @@ export class InventoryAPI {
         .from("inventory")
         .select(`
           *,
-          category:categories(*),
-          warehouse_inventory(
-            *,
-            warehouse:warehouses(*)
-          )
+          category:categories(*)
         `, { count: "exact" })
         .eq("active", true)
         .eq("type", "product")
@@ -48,12 +44,7 @@ export class InventoryAPI {
         .from("inventory")
         .select(`
         *,
-        category:categories(*),
-        warehouse_inventory(
-          *,
-          warehouse:warehouses(*)
-        )
-      `, { count: "exact" })
+        category:categories(*)`, { count: "exact" })
         .ilike("name", `%${query}%`) // Or any column you want to search
         .eq("active", true)
 
@@ -77,11 +68,7 @@ export class InventoryAPI {
         .from("inventory")
         .select(`
           *,
-          category:categories(*),
-          warehouse_inventory(
-            *,
-            warehouse:warehouses(*)
-          )
+          category:categories(*)
         `)
         .eq("id", id)
         .eq("active", true)
@@ -196,11 +183,7 @@ export class InventoryAPI {
         .from("inventory")
         .select(`
           *,
-          category:categories(*),
-          warehouse_inventory(
-            *,
-            warehouse:warehouses(*)
-          )
+          category:categories(*)
         `, { count: "exact" })
         .eq("active", true)
         .range(from, to)
@@ -256,22 +239,13 @@ export class InventoryAPI {
     }
   }
 
-  static async getTotalQuantityPerProduct(): Promise<any[]> {
-    try {
-      const { data, error } = await supabase.rpc("get_product_quantities_by_warehouse");
+  static async getTotalQuantityPerProduct() {
+    const { data, error } = await supabase.rpc('get_total_quantity_per_product');
 
-      if (error) {
-        console.error("❌ Error calling Supabase function:", error.message);
-        throw error;
-      }
-
-      console.log("✅ Aggregated stock:", data);
-      return data;
-    } catch (error) {
-      console.error("Error in getTotalQuantityPerProduct:", error);
-      throw error;
+    if (error) {
+      console.error("❌ Error calling Supabase function:", error.message);
+      return;
     }
+    return data || []
   }
-
-
 }
