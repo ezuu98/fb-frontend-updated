@@ -32,8 +32,8 @@ export interface Warehouse {
   active: boolean
   created_at: string
   updated_at: string
-  low_stock_id:string
-  display_name:string
+  low_stock_id: string
+  display_name: string
 }
 
 export interface Category {
@@ -55,7 +55,7 @@ export interface InventoryItem {
   standard_price?: number
   sale_avg_price?: number
   purchase_avg_price?: number
-  qty_available:number
+  qty_available: number
   reordering_min_qty: number
   reordering_max_qty: number
   active: boolean
@@ -71,6 +71,8 @@ export interface WarehouseInventory {
   id: string
   inventory_id: string
   warehouse_id: string
+  quantity: number // ✅ Add this
+  product_id?: string // if used  }
   opening_stock: number
   current_stock: number
   reserved_stock: number

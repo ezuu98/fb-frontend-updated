@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { useCallback } from "react"
+import debounce from "lodash/debounce"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   DropdownMenu,
@@ -47,7 +49,13 @@ export function InventoryDashboard() {
   const itemsPerPage = 30
   const { inventory, totalItems, loading, error, lowStockCount, outOfStockCount, refetch, searchInventory, getLowStockItems, setPage, page, totalQuantityPerProduct } = useInventory(currentPage, itemsPerPage)
   const { user, profile, signOut } = useAuth()
-  
+  const debouncedSearch = useCallback(
+    debounce((query: string) => {
+      searchInventory(query) // your Supabase search function
+    }, 300),
+    []
+  )
+
   const handleSkuClick = (item: InventoryWithDetails) => {
     setSelectedSku(item)
     setCurrentView("sku-detail")
@@ -75,30 +83,14 @@ export function InventoryDashboard() {
       };
 
       const validWarehouseCodes = Object.keys(warehouseMap);
-      
+
       item.warehouse_inventory?.forEach((wh) => {
         const whCode = wh.warehouse?.code?.toLowerCase();
-        const barcode = item.barcode;
-        console.log("sadiq3")
-
-        
         if (whCode && validWarehouseCodes.includes(whCode)) {
-          // Find the matching entry in totalQuantityPerProduct
-          const match = totalQuantityPerProduct?.find(
-            (entry) =>
-              entry.barcode === barcode &&
-              entry.warehouse_code?.toLowerCase() === whCode
-          );
-          console.log("Sadiq 2")
-
-          if (match) {
-            warehouseMap[whCode] = match.quantity;
-            console.log("Sadiq")
-            console.log(match.quantity)
-          }
+          warehouseMap[whCode] = wh.quantity || 0;
         }
-      });;  
 
+      });;
 
       const totalStock = Object.values(warehouseMap).reduce((sum, qty) => sum + qty, 0);
       const isLowStock = totalStock <= item.reordering_min_qty;
@@ -117,7 +109,7 @@ export function InventoryDashboard() {
         isLowStock,
         reorderLevel: item.reordering_min_qty,
         originalData: item,
-        
+
       };
     });
   }, [inventory, totalQuantityPerProduct]);
@@ -340,7 +332,19 @@ export function InventoryDashboard() {
                 <Input
                   placeholder="by SKU Product Name or Barcode"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setSearchTerm(value)
+
+                    if (value.trim()) {
+                      debouncedSearch(value) // 🔁 Debounced version
+                    } else {
+                      setPage(1)
+                      refetch()
+                    }
+                  }}
+
+
                   className="pl-10 bg-gray-50 border-gray-200"
                 />
               </div>
@@ -475,7 +479,6 @@ export function InventoryDashboard() {
                   disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
                   onClick={() => {
                     setCurrentPage((prev) => prev + 1)
-                    setPage((prev) => prev + 1)
                   }}
                 >
                   Next
