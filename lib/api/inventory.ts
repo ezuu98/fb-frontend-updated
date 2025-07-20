@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase-client"
-import type { InventoryWithDetails, InventoryItem, WarehouseInventory } from "@/lib/supabase"
+import type { InventoryWithDetails, WarehouseInventory } from "@/lib/supabase"
 
 export class InventoryAPI {
   static async getInventoryWithWarehouses(page = 1, limit = 30): Promise<{
@@ -103,29 +103,6 @@ export class InventoryAPI {
     }
   }
 
-
-
-  // Get single inventory item with details
-  static async getInventoryById(id: string): Promise<InventoryWithDetails | null> {
-    try {
-      const { data, error } = await supabase
-        .from("inventory")
-        .select(`
-          *,
-          category:categories(*)
-        `)
-        .eq("id", id)
-        .eq("active", true)
-        .single()
-
-      if (error) throw error
-      return data
-    } catch (error) {
-      console.error("Error in getInventoryById:", error)
-      throw error
-    }
-  }
-
   // Update warehouse inventory
   static async updateWarehouseInventory(
     inventoryId: string,
@@ -148,24 +125,6 @@ export class InventoryAPI {
       throw error
     }
   }
-
-  // Check if barcode exists
-  static async checkBarcodeExists(barcode: string): Promise<boolean> {
-    try {
-      const { data, error } = await supabase.from("inventory").select("id").eq("barcode", barcode).single()
-
-      if (error && error.code !== "PGRST116") {
-        throw error
-      }
-
-      return !!data
-    } catch (error) {
-      console.error("Error checking barcode:", error)
-      return false
-    }
-  }
-
-
 
   static async lowStockCount(): Promise<{
     lowStockCount: number

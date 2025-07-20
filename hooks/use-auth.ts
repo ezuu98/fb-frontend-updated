@@ -13,8 +13,7 @@ export function useAuth() {
 
   const fetchProfile = async (userId: string, retryCount = 0) => {
     try {
-      console.log(`Fetching profile for user: ${userId}`)
-
+      
       const { data: profile, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
 
       if (error) {
@@ -22,8 +21,7 @@ export function useAuth() {
 
         if (error.code === "PGRST116" && retryCount < 3) {
           // Profile doesn't exist, try to create it
-          console.log("Profile not found, creating new profile...")
-
+       
           const currentUser = await supabase.auth.getUser()
           if (currentUser.data.user) {
             const { data: newProfile, error: insertError } = await supabase
@@ -46,13 +44,11 @@ export function useAuth() {
               setTimeout(() => fetchProfile(userId, retryCount + 1), 1000)
               return
             } else {
-              console.log("Profile created successfully:", newProfile)
               setProfile(newProfile)
             }
           }
         }
       } else {
-        console.log("Profile fetched successfully:", profile)
         setProfile(profile)
       }
     } catch (error) {
@@ -69,7 +65,6 @@ export function useAuth() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return
 
-      console.log("Initial session:", session?.user?.email)
       setSession(session)
       setUser(session?.user ?? null)
 
@@ -86,7 +81,6 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
 
-      console.log("Auth state changed:", event, session?.user?.email)
       setSession(session)
       setUser(session?.user ?? null)
 

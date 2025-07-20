@@ -45,23 +45,39 @@ export function InventoryDashboard() {
   const [currentView, setCurrentView] = useState<"dashboard" | "sku-detail">("dashboard")
   const [selectedSku, setSelectedSku] = useState<InventoryWithDetails | null>(null)
   const [showOdooSync, setShowOdooSync] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 30
-  const { inventory, totalItems, loading, error, lowStockCount, outOfStockCount, refetch, searchInventory, setPage, page, totalQuantityPerProduct } = useInventory(currentPage, itemsPerPage)
-  const { user, profile, signOut } = useAuth()
   
+  const itemsPerPage = 30
+  
+  // Use ONLY the hook's page state - remove local currentPage
+  const { 
+    inventory, 
+    totalItems, 
+    loading, 
+    error, 
+    lowStockCount, 
+    outOfStockCount, 
+    refetch, 
+    searchInventory, 
+    setPage, 
+    page, 
+    totalQuantityPerProduct 
+  } = useInventory(1, itemsPerPage) // Start with page 1
+  
+  const { user, profile, signOut } = useAuth()
   
   const debouncedSearch = useCallback(
     debounce((query: string) => {
-      searchInventory(query) // your Supabase search function
+      setPage(1) // Reset to page 1 when searching
+      searchInventory(query)
     }, 800),
-    []
+    [searchInventory, setPage]
   )
 
   const handleSkuClick = (item: InventoryWithDetails) => {
     setSelectedSku(item)
     setCurrentView("sku-detail")
   }
+  
   const handleBackToDashboard = () => {
     setCurrentView("dashboard")
     setSelectedSku(null)
@@ -71,9 +87,19 @@ export function InventoryDashboard() {
     await signOut()
   }
 
+  // Handle pagination
+  const handleNextPage = () => {
+    console.log("Next page clicked, current page:", page)
+    setPage(page + 1)
+  }
+
+  const handlePreviousPage = () => {
+    console.log("Previous page clicked, current page:", page)
+    setPage(page - 1)
+  }
+
   // Transform Supabase data for display
   const transformedInventory = useMemo(() => {
-
     return inventory.map((item) => {
       const warehouseMap: Record<string, number> = {
         bdrwh: 0,
@@ -91,11 +117,11 @@ export function InventoryDashboard() {
         if (whCode && validWarehouseCodes.includes(whCode)) {
           warehouseMap[whCode] = wh.quantity || 0;
         }
-
-      });;
+      });
 
       const totalStock = Object.values(warehouseMap).reduce((sum, qty) => sum + qty, 0);
       const isLowStock = totalStock <= item.reordering_min_qty;
+      
       return {
         id: item.id,
         barcode: item.barcode,
@@ -111,7 +137,6 @@ export function InventoryDashboard() {
         isLowStock,
         reorderLevel: item.reordering_min_qty,
         originalData: item,
-
       };
     });
   }, [inventory, totalQuantityPerProduct]);
@@ -140,15 +165,15 @@ export function InventoryDashboard() {
     })
   }, [transformedInventory, searchTerm, category, stockStatus])
 
+  // Reset to page 1 when filters change
   useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, category, stockStatus])
+    setPage(1)
+  }, [searchTerm, category, stockStatus, setPage])
 
   const paginatedData = filteredData
 
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {
-    
     return {
       totalProducts: totalItems
     }
@@ -297,14 +322,12 @@ export function InventoryDashboard() {
                     setSearchTerm(value)
 
                     if (value.trim()) {
-                      debouncedSearch(value) // 🔁 Debounced version
+                      debouncedSearch(value)
                     } else {
                       setPage(1)
-                      refetch()
+                      searchInventory('')
                     }
                   }}
-
-
                   className="pl-10 bg-gray-50 border-gray-200"
                 />
               </div>
@@ -420,26 +443,27 @@ export function InventoryDashboard() {
                 ))}
               </TableBody>
             </Table>
-            <div className="flex justify-between items-center py-4">
+            <div className="flex justify-between items-center py-4 px-6">
               <div className="text-sm text-gray-600">
-                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
+                Showing {(page - 1) * itemsPerPage + 1} to {Math.min(page * itemsPerPage, totalItems)} of {totalItems} entries
               </div>
               <div className="flex space-x-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((prev) => prev - 1)}
+                  disabled={page === 1}
+                  onClick={handlePreviousPage}
                 >
                   Previous
                 </Button>
+                <span className="flex items-center px-3 py-1 text-sm text-gray-600">
+                  Page {page} of {Math.ceil(totalItems / itemsPerPage)}
+                </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
-                  onClick={() => {
-                    setCurrentPage((prev) => prev + 1)
-                  }}
+                  disabled={page >= Math.ceil(totalItems / itemsPerPage)}
+                  onClick={handleNextPage}
                 >
                   Next
                 </Button>
@@ -451,5 +475,3 @@ export function InventoryDashboard() {
     </div>
   )
 }
-
-
