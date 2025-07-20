@@ -1,8 +1,7 @@
 import { supabase } from "@/lib/supabase-client"
-import type { InventoryWithDetails, InventoryItem, WarehouseInventory, QuantityEntry } from "@/lib/supabase"
+import type { InventoryWithDetails, InventoryItem, WarehouseInventory } from "@/lib/supabase"
 
 export class InventoryAPI {
-  // Get all inventory items with warehouse details
   static async getInventoryWithWarehouses(page = 1, limit = 30): Promise<{
     data: InventoryWithDetails[]
     total: number
@@ -127,70 +126,6 @@ export class InventoryAPI {
     }
   }
 
-  // Create new inventory item
-  static async createInventoryItem(item: Partial<InventoryItem>): Promise<InventoryItem> {
-    try {
-      const { data: user } = await supabase.auth.getUser()
-
-      // Check if barcode already exists
-      const { data: existingProduct } = await supabase
-        .from("inventory")
-        .select("barcode")
-        .eq("barcode", item.barcode)
-        .single()
-
-      if (existingProduct) {
-        throw new Error("A product with this barcode already exists")
-      }
-
-      const { data, error } = await supabase
-        .from("inventory")
-        .insert({
-          ...item,
-          created_by: user.user?.id,
-        })
-        .select()
-        .single()
-
-      if (error) {
-        if (error.code === "23505") {
-          throw new Error("A product with this barcode already exists")
-        }
-        throw error
-      }
-
-      return data
-    } catch (error) {
-      console.error("Error in createInventoryItem:", error)
-      throw error
-    }
-  }
-
-  // Update inventory item
-  static async updateInventoryItem(id: string, updates: Partial<InventoryItem>): Promise<InventoryItem> {
-    try {
-      const { data, error } = await supabase.from("inventory").update(updates).eq("id", id).select().single()
-
-      if (error) throw error
-      return data
-    } catch (error) {
-      console.error("Error in updateInventoryItem:", error)
-      throw error
-    }
-  }
-
-  // Delete inventory item (soft delete)
-  static async deleteInventoryItem(id: string): Promise<void> {
-    try {
-      const { error } = await supabase.from("inventory").update({ is_active: false }).eq("id", id)
-
-      if (error) throw error
-    } catch (error) {
-      console.error("Error in deleteInventoryItem:", error)
-      throw error
-    }
-  }
-
   // Update warehouse inventory
   static async updateWarehouseInventory(
     inventoryId: string,
@@ -211,37 +146,6 @@ export class InventoryAPI {
     } catch (error) {
       console.error("Error in updateWarehouseInventory:", error)
       throw error
-    }
-  }
-
-
-  // Get low stock items
-  static async getLowStockItems(page = 1, limit = 30): Promise<{
-    data: InventoryWithDetails[],
-    total: number
-  }> {
-    try {
-      const from = (page - 1) * limit
-      const to = from + limit - 1
-
-      const { data, count, error } = await supabase
-        .from("inventory")
-        .select(`
-          *,
-          category:categories(*)
-        `, { count: "exact" })
-        .eq("active", true)
-        .range(from, to)
-        .order("name")
-
-      if (error) throw error
-      return {
-        data: data || [],
-        total: count || 0
-      }
-    } catch (error) {
-      console.error("Error in getLowStock:", error);
-      throw error;
     }
   }
 
@@ -282,15 +186,5 @@ export class InventoryAPI {
       console.error("Error in lowStockCount:", error)
       throw error
     }
-  }
-
-  static async getTotalQuantityPerProduct() {
-    const { data, error } = await supabase.rpc('get_low_stock_count');
-
-    if (error) {
-      console.error("❌ Error calling Supabase function:", error.message);
-      return;
-    }
-    return data || []
   }
 }

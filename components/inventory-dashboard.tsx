@@ -47,12 +47,14 @@ export function InventoryDashboard() {
   const [showOdooSync, setShowOdooSync] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 30
-  const { inventory, totalItems, loading, error, lowStockCount, outOfStockCount, refetch, searchInventory, getLowStockItems, setPage, page, totalQuantityPerProduct } = useInventory(currentPage, itemsPerPage)
+  const { inventory, totalItems, loading, error, lowStockCount, outOfStockCount, refetch, searchInventory, setPage, page, totalQuantityPerProduct } = useInventory(currentPage, itemsPerPage)
   const { user, profile, signOut } = useAuth()
+  
+  
   const debouncedSearch = useCallback(
     debounce((query: string) => {
       searchInventory(query) // your Supabase search function
-    }, 300),
+    }, 800),
     []
   )
 
@@ -142,26 +144,13 @@ export function InventoryDashboard() {
     setCurrentPage(1)
   }, [searchTerm, category, stockStatus])
 
-  useEffect(() => {
-    if (stockStatus === "low-stock") {
-      getLowStockItems()
-    } else {
-      refetch()
-    }
-  }, [stockStatus])
-
   const paginatedData = filteredData
 
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {
-    const totalValue = transformedInventory.reduce((sum, item) => {
-      const unitCost = item.originalData.standard_price || 0
-      return sum + item.totalStock * unitCost
-    }, 0)
-
+    
     return {
-      totalProducts: totalItems,
-      totalValue,
+      totalProducts: totalItems
     }
   }, [transformedInventory, totalItems])
 
@@ -201,29 +190,8 @@ export function InventoryDashboard() {
               <div className="w-6 h-6 bg-gray-800 rounded"></div>
               <span className="text-xl font-semibold text-gray-900">FreshBasket</span>
             </div>
-            <nav className="flex space-x-6">
-              <a href="#" className="text-gray-600 hover:text-gray-900">
-                Dashboard
-              </a>
-              <a href="#" className="text-gray-600 hover:text-gray-900">
-                Sales
-              </a>
-              <a href="#" className="text-gray-900 font-medium">
-                Inventory
-              </a>
-              <a href="#" className="text-gray-600 hover:text-gray-900">
-                Customers
-              </a>
-              <a href="#" className="text-gray-600 hover:text-gray-900">
-                Reports
-              </a>
-            </nav>
           </div>
           <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input placeholder="Search" className="pl-10 w-64 bg-gray-100 border-0" />
-            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -269,10 +237,10 @@ export function InventoryDashboard() {
             <div className="flex space-x-2">
               <Dialog open={showOdooSync} onOpenChange={setShowOdooSync}>
                 <DialogTrigger asChild>
-                  <Button variant="outline">
+                  {/* <Button variant="outline">
                     <Database className="w-4 h-4 mr-2" />
                     Connect Odoo
-                  </Button>
+                  </Button> */}
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
@@ -282,7 +250,7 @@ export function InventoryDashboard() {
                   <OdooSyncPanel />
                 </DialogContent>
               </Dialog>
-              <AddProductModal onProductAdded={refetch} />
+              {/* <AddProductModal onProductAdded={refetch} /> */}
             </div>
           </div>
 
@@ -312,14 +280,6 @@ export function InventoryDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">{outOfStockCount}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">£{dashboardStats.totalValue.toFixed(2)}</div>
               </CardContent>
             </Card>
           </div>

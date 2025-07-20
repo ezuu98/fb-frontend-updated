@@ -1,8 +1,9 @@
 import { supabase } from "@/lib/supabase-client"
 import type { StockMovement } from "@/lib/supabase"
 
+
+
 export class StockMovementAPI {
-  // Create stock movement
   static async createStockMovement(movement: Partial<StockMovement>): Promise<StockMovement> {
     const { data: user } = await supabase.auth.getUser()
 

@@ -17,16 +17,6 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
   const [isSearching, setIsSearching] = useState(false)
   const [page, setPage] = useState(initialPage)
 
-
-  const fetchTotalQuantityPerProduct = async () => {
-    try {
-      const result: QuantityEntry[] = await InventoryAPI.getTotalQuantityPerProduct()
-      setTotalQuantityPerProduct(result)
-    } catch (err) {
-      console.error("Error fetching total quantity per product:", err)
-    }
-  }
-
   const fetchInventory = async () => {
     try {
       if (searchQuery) {
@@ -58,8 +48,7 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
   useEffect(() => {
     fetchInventory()
     fetchStockCounts()
-    fetchTotalQuantityPerProduct()
-
+    
     const inventoryChannel = supabase
       .channel("inventory_changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, fetchInventory)
@@ -77,31 +66,12 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
     setPage(1)
   }
 
-
-  const getLowStockItems = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      const result = await InventoryAPI.getLowStockItems(page, itemsPerPage)
-      setInventory(result.data)
-      setTotalItems(result.total)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to get low stock items")
-    } finally {
-      setLoading(false)
-    }
-
-
-  }
-
   return {
     inventory,
     totalItems,
     loading,
     error,
     refetch: fetchInventory,
-    getLowStockItems,
     lowStockCount,
     outOfStockCount,
     totalQuantityPerProduct,
