@@ -67,11 +67,11 @@ export class InventoryAPI {
         *,
         category:categories(*)
       `, { count: "exact" })
-        .or(`name.ilike.%${query}%,barcode.ilike.%${query}%`)
+        .or(`name.ilike.${query}%,barcode.ilike.%${query}%`)
         .eq("active", true)
         .eq("type", "product")
         .order("name", { ascending: true })
-        .range(from, to) // ✅ add pagination here
+        .range(from, to)
 
       if (error) throw error
 
@@ -99,29 +99,6 @@ export class InventoryAPI {
       }
     } catch (error) {
       console.error("Error in searchInventory:", error)
-      throw error
-    }
-  }
-
-  // Update warehouse inventory
-  static async updateWarehouseInventory(
-    inventoryId: string,
-    warehouseId: string,
-    updates: Partial<WarehouseInventory>,
-  ): Promise<WarehouseInventory> {
-    try {
-      const { data, error } = await supabase
-        .from("warehouse_inventory")
-        .update(updates)
-        .eq("inventory_id", inventoryId)
-        .eq("warehouse_id", warehouseId)
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
-    } catch (error) {
-      console.error("Error in updateWarehouseInventory:", error)
       throw error
     }
   }

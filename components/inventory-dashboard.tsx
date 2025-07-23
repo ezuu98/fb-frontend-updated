@@ -40,7 +40,6 @@ import { useEffect } from "react"
 export function InventoryDashboard() {
   const [searchTerm, setSearchTerm] = useState("")
   const [category, setCategory] = useState("All Categories")
-  const [warehouse, setWarehouse] = useState("All Warehouses")
   const [stockStatus, setStockStatus] = useState("All Status")
   const [currentView, setCurrentView] = useState<"dashboard" | "sku-detail">("dashboard")
   const [selectedSku, setSelectedSku] = useState<InventoryWithDetails | null>(null)
@@ -59,9 +58,8 @@ export function InventoryDashboard() {
     refetch, 
     searchInventory, 
     setPage, 
-    page, 
-    totalQuantityPerProduct 
-  } = useInventory(1, itemsPerPage) // Start with page 1
+    page
+  } = useInventory(1, itemsPerPage)
   
   const { user, profile, signOut } = useAuth()
   
@@ -139,7 +137,7 @@ export function InventoryDashboard() {
         originalData: item,
       };
     });
-  }, [inventory, totalQuantityPerProduct]);
+  }, [inventory]);
 
   // Get unique categories from the data
   const availableCategories = useMemo(() => {

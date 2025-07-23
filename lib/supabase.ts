@@ -54,6 +54,7 @@ export interface InventoryItem {
   uom_name: string
   standard_price?: number
   sale_avg_price?: number
+  list_price?: number
   purchase_avg_price?: number
   qty_available: number
   reordering_min_qty: number
