@@ -47,7 +47,6 @@ export function InventoryDashboard() {
   
   const itemsPerPage = 30
   
-  // Use ONLY the hook's page state - remove local currentPage
   const { 
     inventory, 
     totalItems, 
@@ -111,7 +110,8 @@ export function InventoryDashboard() {
       const validWarehouseCodes = Object.keys(warehouseMap);
 
       item.warehouse_inventory?.forEach((wh) => {
-        const whCode = wh.warehouse?.code?.toLowerCase();
+        const warehouseObj = Array.isArray(wh.warehouse) ? wh.warehouse[0] : wh.warehouse;
+        const whCode = warehouseObj?.code?.toLowerCase();
         if (whCode && validWarehouseCodes.includes(whCode)) {
           warehouseMap[whCode] = wh.quantity || 0;
         }
@@ -124,7 +124,7 @@ export function InventoryDashboard() {
         id: item.id,
         barcode: item.barcode,
         product: item.name,
-        category: item.category?.name,
+        category: Array.isArray(item.category) ? (item.category[0] as any)?.display_name : (item.category as any)?.display_name,
         bdrwh: warehouseMap.bdrwh,
         mhowh: warehouseMap.mhowh,
         sbzwh: warehouseMap.sbzwh,

@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { InventoryWithDetails } from "@/lib/supabase"
 import { useEffect, useState } from "react"
-import { PurchaseDetailsService } from "@/lib/api/inventory"
+import { PurchaseDetailsService, PurchaseReturnsService } from "@/lib/api/inventory"
 
 interface SkuDetailViewProps {
   sku: InventoryWithDetails
@@ -37,25 +37,29 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [purchaseData, setPurchaseData] = useState<any[]>([]);
+  const [purchaseReturnData, setPurchaseReturnData] = useState<any[]>([]);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const combinedDate = `${selectedYear}-${selectedMonth}`;
-  
-  const warehouseData = sku.warehouse_inventory?.map((wh) => ({
-    warehouse: wh.warehouse?.name || wh.warehouse?.code || "Unknown",
-    warehouseCode: wh.warehouse?.code || "",
-    openingStock: wh.quantity || 0,
-    purchases: 0, // Will be populated from purchaseData
-    sales: 0, // Placeholder, replace with actual data if available
-    purchaseReturns: 0, // Placeholder, replace with actual data if available
-    wastages: 0, // Placeholder, replace with actual data if available
-    transferIN: 0, // Placeholder, replace with actual data if available
-    transferOUT: 0, // Placeholder, replace with actual data if available
-    manufacturing: 0, // Placeholder, replace with actual data if available
-    closingStock: 0, // Calculate based on movements
-    lastUpdated: wh.last_updated ? new Date(wh.last_updated).toLocaleDateString() : "N/A",
-  })) || [];
+
+  const warehouseData = sku.warehouse_inventory?.map((wh) => {
+    const warehouseObj = Array.isArray(wh.warehouse) ? (wh.warehouse[0] as any) : (wh.warehouse as any);
+    return {
+      warehouse: warehouseObj?.name || warehouseObj?.code || "Unknown",
+      warehouseCode: warehouseObj?.code || "",
+      openingStock: wh.quantity || 0,
+      purchases: 0, // Will be populated from purchaseData
+      sales: 0, // Placeholder, replace with actual data if available
+      purchaseReturns: 0, // Placeholder, replace with actual data if available
+      wastages: 0, // Placeholder, replace with actual data if available
+      transferIN: 0, // Placeholder, replace with actual data if available
+      transferOUT: 0, // Placeholder, replace with actual data if available
+      manufacturing: 0, // Placeholder, replace with actual data if available
+      closingStock: 0, // Calculate based on movements
+      lastUpdated: (wh as any).last_updated ? new Date((wh as any).last_updated).toLocaleDateString() : "N/A",
+    }
+  }) || [];
 
   // Calculate totals including purchase data
   const calculateTotals = () => {
@@ -72,18 +76,24 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     warehouseData.forEach((row) => {
       const purchase = purchaseData.find((p) => p.warehouse_code === row.warehouseCode);
       const purchases = purchase ? purchase.total_quantity : 0;
-      
+
+      const purchaseReturn = purchaseReturnData.find((p) => p.warehouse_code === row.warehouseCode);
+      const purchasesReturn = purchaseReturn ? purchaseReturn.total_quantity : 0;
+
+
+
+
       totalOpeningStock += row.openingStock;
       totalPurchases += purchases;
       totalSales += row.sales;
-      totalPurchaseReturns += row.purchaseReturns;
+      totalPurchaseReturns -= purchasesReturn;
       totalWastages += row.wastages;
       totalTransferIN += row.transferIN;
       totalTransferOUT += row.transferOUT;
       totalManufacturing += row.manufacturing;
-      
+
       // Calculate closing stock: opening + purchases - sales - returns + transferIN - transferOUT + manufacturing - wastages
-      const closingStock = row.openingStock + purchases - row.sales - row.purchaseReturns + row.transferIN - row.transferOUT + row.manufacturing - row.wastages;
+      const closingStock = row.openingStock + purchases - row.sales - purchasesReturn + row.transferIN - row.transferOUT + row.manufacturing - row.wastages;
       totalClosingStock += closingStock;
     });
 
@@ -124,6 +134,25 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     };
     fetchPurchases();
   }, [sku.odoo_id, sku.id, combinedDate]);
+
+  useEffect(() => {
+    const fetchPurchaseReturns = async () => {
+      try {
+        const [year, month] = combinedDate.split('-');
+        const { data } = await PurchaseReturnsService.getPurchaseReturns(
+          String(sku.odoo_id),
+          parseInt(month, 10),
+          parseInt(year, 10)
+        );
+        setPurchaseReturnData(data);
+      } catch (err: any) {
+        console.error("Purchase return data error:", err);
+      }
+    };
+
+    fetchPurchaseReturns();
+  }, [sku.odoo_id, combinedDate]);
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -166,7 +195,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             <div className="flex items-center space-x-4 text-sm text-gray-600">
               <span>Barcode: {sku.barcode}</span>
               <span>•</span>
-              <span>Category: {sku.category?.name || "Uncategorized"}</span>
+              <span>Category: {Array.isArray(sku.category) ? (sku.category[0] as any)?.display_name : (sku.category as any)?.display_name || "Uncategorized"}</span>
               <span>•</span>
               <span>Reorder Level: {sku.reordering_min_qty}</span>
             </div>
@@ -188,7 +217,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Category:</span>
-                  <span>{sku.category?.name || "Uncategorized"}</span>
+                  <span>{Array.isArray(sku.category) ? (sku.category[0] as any)?.display_name : (sku.category as any)?.display_name || "Uncategorized"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Unit of Measure:</span>
@@ -297,8 +326,11 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                       {warehouseData.map((row, index) => {
                         const purchase = purchaseData.find((p) => p.warehouse_code === row.warehouseCode);
                         const purchases = purchase ? purchase.total_quantity : 0;
+                        const purchaseReturn = purchaseReturnData.find((p) => p.warehouse_code === row.warehouseCode);
+                        const purchasesReturn = purchaseReturn ? purchaseReturn.total_quantity : 0;
+
                         const closingStock = row.openingStock + purchases - row.sales - row.purchaseReturns + row.transferIN - row.transferOUT + row.manufacturing - row.wastages;
-                        
+
                         return (
                           <TableRow key={index} className="hover:bg-gray-50">
                             <TableCell className="font-medium">
@@ -310,14 +342,8 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                               </div>
                             </TableCell>
                             <TableCell className="text-center text-blue-600">{row.openingStock}</TableCell>
-                            <TableCell className="text-center font-medium text-green-600">
-                              {purchaseLoading ? (
-                                <span className="text-gray-400">Loading...</span>
-                              ) : (
-                                purchases
-                              )}
-                            </TableCell>
-                            <TableCell className="text-center text-orange-600">{row.purchaseReturns}</TableCell>
+                            <TableCell className="text-center text-orange-600">{purchases}</TableCell>
+                            <TableCell className="text-center text-orange-600">{purchasesReturn}</TableCell>
                             <TableCell className="text-center text-red-600 font-medium">{row.sales}</TableCell>
                             <TableCell className="text-center text-sm text-gray-500">{row.wastages}</TableCell>
                             <TableCell className="text-center text-sm text-gray-500">{row.transferIN}</TableCell>

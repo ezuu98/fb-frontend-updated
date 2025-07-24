@@ -32,25 +32,22 @@ export interface Category {
   id: string
   name: string
   display_name?: string
-  parent_id?: string
-  is_active: boolean
+  active: boolean
   created_at: string
 }
 
 export interface InventoryItem {
-  id: string
+  odoo_id: number
   barcode: string
   name: string
-  description?: string
-  categ_id?: string
   uom_name: string
+  category_id?: number
   standard_price?: number
-  sale_avg_price?: number
-  list_price?: number
-  purchase_avg_price?: number
-  qty_available: number
   reordering_min_qty: number
   reordering_max_qty: number
+  categ_id?: string
+  list_price?: number
+  purchase_avg_price?: number
   created_by?: string
   created_at: string
   updated_at: string
@@ -168,8 +165,23 @@ export interface PurchaseDetails {
   }
 }
 
+
+export interface PurchaseReturns {
+  product_id: number
+  quantity: number
+  warehouse_id: number
+  warehouses: {
+    code: string
+  }
+}
+
 // Additional interface for the purchase details API response
 export interface PurchaseDetailsResponse {
+  warehouse_code: string
+  total_quantity: number
+}
+
+export interface PurchaseReturnsResponse {
   warehouse_code: string
   total_quantity: number
 }

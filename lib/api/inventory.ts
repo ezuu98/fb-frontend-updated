@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase-client"
-import type { InventoryWithDetails, PurchaseDetails, PurchaseDetailsResponse } from "@/lib/supabase"
+import type { InventoryWithDetails, PurchaseDetailsResponse, PurchaseReturns, PurchaseReturnsResponse } from "@/lib/supabase"
 
 export class InventoryAPI {
   static async getInventoryWithWarehouses(page = 1, limit = 30): Promise<{
@@ -149,8 +149,8 @@ export class PurchaseDetailsService {
           warehouses!warehouse_dest_id(code)
         `)
         .eq("product_id", product_id)
-        .gte("date_purchased", startDate)
-        .lte("date_purchased", endDate)
+        .gte("date", startDate)
+        .lte("date", endDate)
 
       if (error) throw error
 
@@ -183,3 +183,54 @@ export class PurchaseDetailsService {
     }
   }
 }
+
+export class PurchaseReturnsService {
+  static async getPurchaseReturns(
+    product_id: string,
+    month: number,
+    year: number
+  ): Promise<{ data: PurchaseReturnsResponse[] }> {
+    try {
+      const startDate = `${year}-${String(month).padStart(2, "0")}-01`
+      const endDate = new Date(year, month, 0).toISOString().split("T")[0]
+
+      const { data, error } = await supabase
+        .from("stock_movements")
+        .select(`
+          quantity,
+          warehouse_id,
+          warehouses!warehouse_id(code)
+        `)
+        .eq("product_id", product_id)
+        .gte("date", startDate)
+        .lte("date", endDate)
+
+      if (error) throw error
+
+      const groupedData: Record<string, number> = {}
+     
+      for (const row of data || []) {
+        // Handle both array and object cases for warehouses
+        const warehouse_code = Array.isArray(row.warehouses) 
+          ? row.warehouses[0]?.code || "Unknown"
+          : (row.warehouses as any)?.code || "Unknown"
+        groupedData[warehouse_code] =
+          (groupedData[warehouse_code] || 0) + (row.quantity || 0)
+      }
+
+      // Convert to array with proper typing
+      const result: PurchaseDetailsResponse[] = Object.entries(groupedData).map(
+        ([warehouse_code, total_quantity]) => ({
+          warehouse_code,
+          total_quantity,
+        })
+      )
+
+      return { data: result }
+    } catch (error) {
+      console.error("Error in getPurchaseReturns:", error)
+      throw error
+    }
+  }
+}
+
