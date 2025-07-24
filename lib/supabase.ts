@@ -5,7 +5,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Database Types
 export interface Profile {
   id: string
   email: string
@@ -15,13 +14,6 @@ export interface Profile {
   created_at: string
   updated_at: string
 }
-
-export interface QuantityEntry {
-  barcode: string
-  warehouse_code: string
-  quantity: number
-}
-
 
 export interface Warehouse {
   id: string
@@ -39,7 +31,7 @@ export interface Warehouse {
 export interface Category {
   id: string
   name: string
-  complete_name?: string
+  display_name?: string
   parent_id?: string
   is_active: boolean
   created_at: string
@@ -59,7 +51,6 @@ export interface InventoryItem {
   qty_available: number
   reordering_min_qty: number
   reordering_max_qty: number
-  active: boolean
   created_by?: string
   created_at: string
   updated_at: string
@@ -72,8 +63,8 @@ export interface WarehouseInventory {
   id: string
   inventory_id: string
   warehouse_id: string
-  quantity: number // ✅ Add this
-  product_id?: string // if used  }
+  quantity: number
+  product_id?: string
   opening_stock: number
   current_stock: number
   reserved_stock: number
@@ -84,7 +75,7 @@ export interface WarehouseInventory {
   warehouse?: Warehouse
 }
 
-export interface StockMovement {
+export interface StockMovements {
   id: string
   inventory_id: string
   warehouse_id: string
@@ -101,35 +92,6 @@ export interface StockMovement {
   created_by_profile?: Profile
 }
 
-export interface Supplier {
-  id: string
-  name: string
-  contact_person?: string
-  email?: string
-  phone?: string
-  address?: string
-  is_active: boolean
-  created_at: string
-}
-
-export interface PurchaseOrder {
-  id: string
-  po_number: string
-  supplier_id?: string
-  warehouse_id?: string
-  status: string
-  order_date: string
-  expected_date?: string
-  total_amount: number
-  created_by?: string
-  created_at: string
-  updated_at: string
-  // Relations
-  supplier?: Supplier
-  warehouse?: Warehouse
-  items?: PurchaseOrderItem[]
-}
-
 export interface PurchaseOrderItem {
   id: string
   purchase_order_id: string
@@ -142,14 +104,52 @@ export interface PurchaseOrderItem {
   inventory?: InventoryItem
 }
 
-// API Response Types
-export interface InventoryWithDetails extends InventoryItem {
-  category: Category
-  warehouse_inventory: (WarehouseInventory & { warehouse: Warehouse })[]
-  odoo_id: number | string
+// API Response Types - Fixed to match actual data structure
+export interface InventoryWithDetails {
+  // Core inventory fields
+  odoo_id: string
+  name: string
   barcode: string
-  warehouse_code: string
-  quantity: number
+  uom_name: string
+  standard_price: number
+  list_price: number
+  reordering_min_qty: number
+  reordering_max_qty: number
+  
+  // Additional fields that might be returned from full select
+  id?: string
+  description?: string
+  categ_id?: string
+  sale_avg_price?: number
+  purchase_avg_price?: number
+  qty_available?: number
+  created_by?: string
+  created_at?: string
+  updated_at?: string
+  type?: string
+  
+  // Relations - fixed structure
+  category: {
+    display_name: string
+    active?: boolean
+    id?: string
+    name?: string
+    created_at?: string
+  }[]
+  
+  warehouse_inventory: {
+    quantity: number
+    product_id: string
+    warehouse: {
+      id: string
+      name: string
+      code: string
+    } | {
+      id: string
+      name: string
+      code: string
+    }[] // Handle both single object and array from Supabase join
+  }[]
 }
 
 export interface DashboardStats {
@@ -157,5 +157,19 @@ export interface DashboardStats {
   total_warehouses: number
   low_stock_items: number
   total_value: number
-  recent_movements: StockMovement[]
+}
+
+export interface PurchaseDetails {
+  product_id: number
+  quantity: number
+  warehouse_dest_id: number
+  warehouses: {
+    code: string
+  }
+}
+
+// Additional interface for the purchase details API response
+export interface PurchaseDetailsResponse {
+  warehouse_code: string
+  total_quantity: number
 }

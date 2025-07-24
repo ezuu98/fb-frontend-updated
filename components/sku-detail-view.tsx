@@ -1,11 +1,11 @@
 "use client"
 
-import { ArrowLeft, Search, User } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { ArrowLeft, User } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { InventoryWithDetails } from "@/lib/supabase"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { PurchaseDetailsService } from "@/lib/api/inventory"
 
 interface SkuDetailViewProps {
   sku: InventoryWithDetails
@@ -15,7 +15,6 @@ interface SkuDetailViewProps {
 const today = new Date();
 const currentYear = today.getFullYear();
 const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
-
 
 const months = [
   { value: "01", name: "January" },
@@ -37,60 +36,94 @@ const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
 export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [purchaseData, setPurchaseData] = useState<any[]>([]);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const combinedDate = `${selectedYear}-${selectedMonth}`;
-  const warehouseData =
-    sku.warehouse_inventory.map((wh) => ({
-      warehouse: wh.warehouse?.name || wh.warehouse?.code || "Unknown",
-      warehouseCode: wh.warehouse?.code || "",
-      openingStock: wh.opening_stock,
-      purchases: 0, // Placeholder, replace with actual data if available
-      sales: 0, // Placeholder, replace with actual data if available
-      purchaseReturns: 0, // Placeholder, replace with actual data if available
-      wastages: 0, // Placeholder, replace with actual data if available
-      transferIN: 0, // Placeholder, replace with actual data if available
-      transferOUT: 0, // Placeholder, replace with actual data if available
-      manufacturing: 0, // Placeholder, replace with actual data if available
-      closingStock: 0,
-      lastUpdated: wh.last_updated ? new Date(wh.last_updated).toLocaleDateString() : "N/A",
-    })) || [];
-
-  sku.warehouse_inventory?.map((wh) => ({
+  
+  const warehouseData = sku.warehouse_inventory?.map((wh) => ({
     warehouse: wh.warehouse?.name || wh.warehouse?.code || "Unknown",
     warehouseCode: wh.warehouse?.code || "",
-    // Corrected field names based on your main component structure
-    openingStock: wh.opening_stock,
-    purchases: 0,
-    sales: 0,
-    purchaseReturns: 0,
-    wastages: 0,
-    transferIN: 0,
-    transferOUT: 0,
-    manufacturing: 0,
-    closingStock: 0,
+    openingStock: wh.quantity || 0,
+    purchases: 0, // Will be populated from purchaseData
+    sales: 0, // Placeholder, replace with actual data if available
+    purchaseReturns: 0, // Placeholder, replace with actual data if available
+    wastages: 0, // Placeholder, replace with actual data if available
+    transferIN: 0, // Placeholder, replace with actual data if available
+    transferOUT: 0, // Placeholder, replace with actual data if available
+    manufacturing: 0, // Placeholder, replace with actual data if available
+    closingStock: 0, // Calculate based on movements
     lastUpdated: wh.last_updated ? new Date(wh.last_updated).toLocaleDateString() : "N/A",
-  })) || []
+  })) || [];
 
-  const totalRow = warehouseData.reduce(
-    (acc, row) => ({
-      warehouse: "Total",
-      warehouseCode: "",
-      openingStock: acc.openingStock + 0,//(row.openingStock || 0),
-      currentStock: acc.currentStock + 0,//(row.currentStock || 0),
-      reservedStock: acc.reservedStock + 0,//(row.reservedStock || 0),
-      availableStock: acc.availableStock + 0,//(row.availableStock || 0),
-      lastUpdated: "",
-    }),
-    {
-      warehouse: "Total",
-      warehouseCode: "",
-      openingStock: 0,
-      currentStock: 0,
-      reservedStock: 0,
-      availableStock: 0,
-      lastUpdated: "",
-    },
-  )
+  // Calculate totals including purchase data
+  const calculateTotals = () => {
+    let totalOpeningStock = 0;
+    let totalPurchases = 0;
+    let totalSales = 0;
+    let totalPurchaseReturns = 0;
+    let totalWastages = 0;
+    let totalTransferIN = 0;
+    let totalTransferOUT = 0;
+    let totalManufacturing = 0;
+    let totalClosingStock = 0;
+
+    warehouseData.forEach((row) => {
+      const purchase = purchaseData.find((p) => p.warehouse_code === row.warehouseCode);
+      const purchases = purchase ? purchase.total_quantity : 0;
+      
+      totalOpeningStock += row.openingStock;
+      totalPurchases += purchases;
+      totalSales += row.sales;
+      totalPurchaseReturns += row.purchaseReturns;
+      totalWastages += row.wastages;
+      totalTransferIN += row.transferIN;
+      totalTransferOUT += row.transferOUT;
+      totalManufacturing += row.manufacturing;
+      
+      // Calculate closing stock: opening + purchases - sales - returns + transferIN - transferOUT + manufacturing - wastages
+      const closingStock = row.openingStock + purchases - row.sales - row.purchaseReturns + row.transferIN - row.transferOUT + row.manufacturing - row.wastages;
+      totalClosingStock += closingStock;
+    });
+
+    return {
+      totalOpeningStock,
+      totalPurchases,
+      totalSales,
+      totalPurchaseReturns,
+      totalWastages,
+      totalTransferIN,
+      totalTransferOUT,
+      totalManufacturing,
+      totalClosingStock,
+    };
+  };
+
+  const totals = calculateTotals();
+
+  useEffect(() => {
+    const fetchPurchases = async () => {
+      setPurchaseLoading(true);
+      setPurchaseError(null);
+      try {
+        const [year, month] = combinedDate.split('-');
+        const { data } = await PurchaseDetailsService.getPurchaseDetails(
+          String(sku.odoo_id),
+          parseInt(month, 10),
+          parseInt(year, 10)
+        );
+        setPurchaseData(data);
+        console.log("Purchase data loaded:", data);
+      } catch (err: any) {
+        setPurchaseError(err.message || "Failed to fetch purchase data");
+        console.error("Purchase data error:", err);
+      } finally {
+        setPurchaseLoading(false);
+      }
+    };
+    fetchPurchases();
+  }, [sku.odoo_id, sku.id, combinedDate]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -139,6 +172,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             </div>
             <p className="text-gray-600 mt-2">Real-time inventory levels across all warehouse locations</p>
           </div>
+
           {/* Product Details */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -168,11 +202,11 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Unit Cost:</span>
-                  <span className="font-medium">PKR  {sku.standard_price?.toFixed(2) || "N/A"}</span>
+                  <span className="font-medium">PKR {sku.standard_price?.toFixed(2) || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Selling Price:</span>
-                  <span className="font-medium">PKR  {sku.list_price?.toFixed(2) || "N/A"}</span>
+                  <span className="font-medium">PKR {sku.list_price?.toFixed(2) || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Reorder Level:</span>
@@ -185,107 +219,138 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Stock Value:</span>
                   <span className="font-medium text-green-600">
-                    PKR   {((sku.standard_price || 0) * totalRow.currentStock).toFixed(2)}
+                    PKR {((sku.standard_price || 0) * totals.totalClosingStock).toFixed(2)}
                   </span>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Warehouse Inventory Table */}
-        <div className="mt-12 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Warehouse Inventory</h2>
-
-            {/* Month & Year Dropdowns */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">Select Month:</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {months.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.name}
-                  </option>
-                ))}
-              </select>
-
-              <label className="text-sm font-medium text-gray-700">Select Year:</label>
-              <select
-                id="year-select"
-                value={selectedYear}
-               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+          {/* Loading/Error States */}
+          {purchaseLoading && (
+            <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-blue-800">Loading purchase data...</p>
             </div>
-          </div>
+          )}
 
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="font-medium text-gray-700 min-w-[150px]">Warehouse</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Opening Stock</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchases</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchase Returns</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Sales</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Wastages</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer IN</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer OUT</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Manufacturing Impact</TableHead>
-                  <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Closing Stock</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {warehouseData.length > 0 ? (
-                  <>
-                    {warehouseData.map((row, index) => (
-                      <TableRow key={index} className="hover:bg-gray-50">
-                        <TableCell className="font-medium">
-                          <div>
-                            <div className="font-medium">{row.warehouse}</div>
-                            {row.warehouseCode && <div className="text-sm text-gray-500">{row.warehouseCode}</div>}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center text-blue-600">{row.openingStock}</TableCell>
-                        <TableCell className="text-center font-medium">{row.purchases}</TableCell>
-                        <TableCell className="text-center text-orange-600">{row.purchaseReturns}</TableCell>
-                        <TableCell className="text-center text-green-600 font-medium">{row.sales}</TableCell>
-                        <TableCell className="text-center text-sm text-gray-500">{row.wastages}</TableCell>
-                        <TableCell className="text-center text-sm text-gray-500">{row.transferIN}</TableCell>
-                        <TableCell className="text-center text-sm text-gray-500">{row.transferOUT}</TableCell>
-                        <TableCell className="text-center text-sm text-gray-500">{row.manufacturing}</TableCell>
-                        <TableCell className="text-center text-sm text-gray-500">{row.closingStock}</TableCell>
-                      </TableRow>
-                    ))}
-                    {/* Total Row */}
-                    <TableRow className="bg-gray-50 border-t-2 border-gray-200">
-                      <TableCell className="font-bold">{totalRow.warehouse}</TableCell>
-                      <TableCell className="text-center font-bold text-blue-600">{totalRow.openingStock}</TableCell>
-                      <TableCell className="text-center font-bold">{totalRow.currentStock}</TableCell>
-                      <TableCell className="text-center font-bold text-orange-600">{totalRow.reservedStock}</TableCell>
-                      <TableCell className="text-center font-bold text-green-600">{totalRow.availableStock}</TableCell>
-                      <TableCell className="text-center font-bold">-</TableCell>
-                    </TableRow>
-                  </>
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                      No warehouse data available for this SKU
-                    </TableCell>
+          {purchaseError && (
+            <div className="mt-8 bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-800">Error loading purchase data: {purchaseError}</p>
+            </div>
+          )}
+
+          {/* Warehouse Inventory Table */}
+          <div className="mt-12 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Warehouse Inventory</h2>
+
+              {/* Month & Year Dropdowns */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Select Month:</label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {months.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.name}
+                    </option>
+                  ))}
+                </select>
+
+                <label className="text-sm font-medium text-gray-700">Select Year:</label>
+                <select
+                  id="year-select"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="font-medium text-gray-700 min-w-[150px]">Warehouse</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Opening Stock</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchases</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchase Returns</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Sales</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Wastages</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer IN</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer OUT</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Manufacturing Impact</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Closing Stock</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {warehouseData.length > 0 ? (
+                    <>
+                      {warehouseData.map((row, index) => {
+                        const purchase = purchaseData.find((p) => p.warehouse_code === row.warehouseCode);
+                        const purchases = purchase ? purchase.total_quantity : 0;
+                        const closingStock = row.openingStock + purchases - row.sales - row.purchaseReturns + row.transferIN - row.transferOUT + row.manufacturing - row.wastages;
+                        
+                        return (
+                          <TableRow key={index} className="hover:bg-gray-50">
+                            <TableCell className="font-medium">
+                              <div>
+                                <div className="font-medium">{row.warehouse}</div>
+                                {row.warehouseCode && (
+                                  <div className="text-sm text-gray-500">{row.warehouseCode}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center text-blue-600">{row.openingStock}</TableCell>
+                            <TableCell className="text-center font-medium text-green-600">
+                              {purchaseLoading ? (
+                                <span className="text-gray-400">Loading...</span>
+                              ) : (
+                                purchases
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center text-orange-600">{row.purchaseReturns}</TableCell>
+                            <TableCell className="text-center text-red-600 font-medium">{row.sales}</TableCell>
+                            <TableCell className="text-center text-sm text-gray-500">{row.wastages}</TableCell>
+                            <TableCell className="text-center text-sm text-gray-500">{row.transferIN}</TableCell>
+                            <TableCell className="text-center text-sm text-gray-500">{row.transferOUT}</TableCell>
+                            <TableCell className="text-center text-sm text-gray-500">{row.manufacturing}</TableCell>
+                            <TableCell className="text-center font-medium text-blue-600">{closingStock}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {/* Total Row */}
+                      <TableRow className="bg-gray-50 border-t-2 border-gray-200">
+                        <TableCell className="font-bold">Total</TableCell>
+                        <TableCell className="text-center font-bold text-blue-600">{totals.totalOpeningStock}</TableCell>
+                        <TableCell className="text-center font-bold text-green-600">{totals.totalPurchases}</TableCell>
+                        <TableCell className="text-center font-bold text-orange-600">{totals.totalPurchaseReturns}</TableCell>
+                        <TableCell className="text-center font-bold text-red-600">{totals.totalSales}</TableCell>
+                        <TableCell className="text-center font-bold">{totals.totalWastages}</TableCell>
+                        <TableCell className="text-center font-bold">{totals.totalTransferIN}</TableCell>
+                        <TableCell className="text-center font-bold">{totals.totalTransferOUT}</TableCell>
+                        <TableCell className="text-center font-bold">{totals.totalManufacturing}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-600">{totals.totalClosingStock}</TableCell>
+                      </TableRow>
+                    </>
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                        No warehouse data available for this SKU
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </div>
       </main>

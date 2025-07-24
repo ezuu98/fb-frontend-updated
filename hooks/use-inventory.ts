@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase-client"
-import { InventoryAPI } from "@/lib/api/inventory"
-import type { InventoryWithDetails, QuantityEntry } from "@/lib/supabase"
+import { InventoryAPI, SearchInventory } from "@/lib/api/inventory"
+import type { InventoryWithDetails } from "@/lib/supabase"
 
 export function useInventory(initialPage = 1, itemsPerPage = 30) {
   const [inventory, setInventory] = useState<InventoryWithDetails[]>([])
@@ -12,7 +12,6 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
   const [error, setError] = useState<string | null>(null)
   const [lowStockCount, setLowStockCount] = useState(0)
   const [outOfStockCount, setOutOfStockCount] = useState(0)
-  const [totalQuantityPerProduct, setTotalQuantityPerProduct] = useState<QuantityEntry[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearching, setIsSearching] = useState(false)
   const [page, setPage] = useState(initialPage)
@@ -20,8 +19,8 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
   const fetchInventory = async () => {
     try {
       if (searchQuery) {
-        const { data, total } = await InventoryAPI.searchInventory(searchQuery, page, itemsPerPage)
-        setInventory(data)
+        const { data, total } = await SearchInventory.searchInventory(searchQuery, page, itemsPerPage)
+        setInventory(data as InventoryWithDetails[])
         setTotalItems(total)
       } else {
         const { data, total } = await InventoryAPI.getInventoryWithWarehouses(page, itemsPerPage)
@@ -74,7 +73,6 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
     refetch: fetchInventory,
     lowStockCount,
     outOfStockCount,
-    totalQuantityPerProduct,
     page,
     setPage,
     searchInventory,
