@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { InventoryWithDetails } from "@/lib/supabase"
 import { useEffect, useState } from "react"
-import { PurchaseDetailsService, PurchaseReturnsService } from "@/lib/api/inventory"
+import { StockMovementService, type StockMovementDetailsResponse } from "@/lib/api/inventory"
 
 interface SkuDetailViewProps {
   sku: InventoryWithDetails
@@ -36,12 +36,9 @@ const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
 export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-  const [purchaseData, setPurchaseData] = useState<any[]>([]);
-  const [purchaseReturnData, setPurchaseReturnData] = useState<any[]>([]);
-  const [purchaseLoading, setPurchaseLoading] = useState(false);
-  const [purchaseError, setPurchaseError] = useState<string | null>(null);
-
-  const combinedDate = `${selectedYear}-${selectedMonth}`;
+  const [stockMovementData, setStockMovementData] = useState<StockMovementDetailsResponse[]>([]);
+  const [stockMovementLoading, setStockMovementLoading] = useState(false);
+  const [stockMovementError, setStockMovementError] = useState<string | null>(null);
 
   const warehouseData = sku.warehouse_inventory?.map((wh) => {
     const warehouseObj = Array.isArray(wh.warehouse) ? (wh.warehouse[0] as any) : (wh.warehouse as any);
@@ -49,19 +46,26 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       warehouse: warehouseObj?.name || warehouseObj?.code || "Unknown",
       warehouseCode: warehouseObj?.code || "",
       openingStock: wh.quantity || 0,
-      purchases: 0, // Will be populated from purchaseData
-      sales: 0, // Placeholder, replace with actual data if available
-      purchaseReturns: 0, // Placeholder, replace with actual data if available
-      wastages: 0, // Placeholder, replace with actual data if available
-      transferIN: 0, // Placeholder, replace with actual data if available
-      transferOUT: 0, // Placeholder, replace with actual data if available
-      manufacturing: 0, // Placeholder, replace with actual data if available
-      closingStock: 0, // Calculate based on movements
       lastUpdated: (wh as any).last_updated ? new Date((wh as any).last_updated).toLocaleDateString() : "N/A",
     }
   }) || [];
 
-  // Calculate totals including purchase data
+  // Enhanced function to get stock movement data for a warehouse
+  const getWarehouseMovements = (warehouseCode: string) => {
+    const movement = stockMovementData.find((m) => m.warehouse_code === warehouseCode);
+    return movement || {
+      warehouse_code: warehouseCode,
+      purchases: 0,
+      sales: 0,
+      purchase_returns: 0,
+      wastages: 0,
+      transfer_in: 0,
+      transfer_out: 0,
+      manufacturing: 0
+    };
+  };
+
+  // Calculate totals including all movement types
   const calculateTotals = () => {
     let totalOpeningStock = 0;
     let totalPurchases = 0;
@@ -74,27 +78,29 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     let totalClosingStock = 0;
 
     warehouseData.forEach((row) => {
-      const purchase = purchaseData.find((p) => p.warehouse_code === row.warehouseCode);
-      const purchases = purchase ? purchase.total_quantity : 0;
-
-      const purchaseReturn = purchaseReturnData.find((p) => p.warehouse_code === row.warehouseCode);
-      const purchasesReturn = purchaseReturn ? purchaseReturn.total_quantity : 0;
-
-
-
+      const movements = getWarehouseMovements(row.warehouseCode);
 
       totalOpeningStock += row.openingStock;
-      totalPurchases += purchases;
-      totalSales += row.sales;
-      totalPurchaseReturns -= purchasesReturn;
-      totalWastages += row.wastages;
-      totalTransferIN += row.transferIN;
-      totalTransferOUT += row.transferOUT;
-      totalManufacturing += row.manufacturing;
+      totalPurchases += movements.purchases;
+      totalSales += movements.sales;
+      totalPurchaseReturns += movements.purchase_returns;
+      totalWastages += movements.wastages;
+      totalTransferIN += movements.transfer_in;
+      totalTransferOUT += movements.transfer_out;
+      totalManufacturing += movements.manufacturing;
 
-      // Calculate closing stock: opening + purchases - sales - returns + transferIN - transferOUT + manufacturing - wastages
-      const closingStock = row.openingStock + purchases - row.sales - purchasesReturn + row.transferIN - row.transferOUT + row.manufacturing - row.wastages;
-      totalClosingStock += closingStock;
+      // Calculate closing stock: 
+      // opening + purchases + transfer_in + manufacturing - sales - purchase_returns - transfer_out - wastages
+      const closingStock = row.openingStock 
+        + movements.purchases 
+        + movements.transfer_in 
+        + movements.manufacturing 
+        - movements.sales 
+        - movements.purchase_returns 
+        - movements.transfer_out 
+        - movements.wastages;
+      
+      totalClosingStock += Math.max(0, closingStock); // Ensure no negative stock
     });
 
     return {
@@ -113,46 +119,27 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const totals = calculateTotals();
 
   useEffect(() => {
-    const fetchPurchases = async () => {
-      setPurchaseLoading(true);
-      setPurchaseError(null);
+    const fetchStockMovementData = async () => {
+      setStockMovementLoading(true);
+      setStockMovementError(null);
       try {
-        const [year, month] = combinedDate.split('-');
-        const { data } = await PurchaseDetailsService.getPurchaseDetails(
-          String(sku.odoo_id),
-          parseInt(month, 10),
-          parseInt(year, 10)
+        const response = await StockMovementService.getStockMovementDetails(
+          sku.odoo_id?.toString() || sku.id?.toString() || "",
+          parseInt(selectedMonth),
+          selectedYear
         );
-        setPurchaseData(data);
-        console.log("Purchase data loaded:", data);
+        setStockMovementData(response.data);
+        console.log("Stock movement data loaded:", response.data);
       } catch (err: any) {
-        setPurchaseError(err.message || "Failed to fetch purchase data");
-        console.error("Purchase data error:", err);
+        setStockMovementError(err.message || "Failed to fetch stock movement data");
+        console.error("Stock movement data error:", err);
       } finally {
-        setPurchaseLoading(false);
+        setStockMovementLoading(false);
       }
     };
-    fetchPurchases();
-  }, [sku.odoo_id, sku.id, combinedDate]);
-
-  useEffect(() => {
-    const fetchPurchaseReturns = async () => {
-      try {
-        const [year, month] = combinedDate.split('-');
-        const { data } = await PurchaseReturnsService.getPurchaseReturns(
-          String(sku.odoo_id),
-          parseInt(month, 10),
-          parseInt(year, 10)
-        );
-        setPurchaseReturnData(data);
-      } catch (err: any) {
-        console.error("Purchase return data error:", err);
-      }
-    };
-
-    fetchPurchaseReturns();
-  }, [sku.odoo_id, combinedDate]);
-
+    
+    fetchStockMovementData();
+  }, [sku.odoo_id, sku.id, selectedMonth, selectedYear]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -256,15 +243,15 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
           </div>
 
           {/* Loading/Error States */}
-          {purchaseLoading && (
+          {stockMovementLoading && (
             <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-blue-800">Loading purchase data...</p>
+              <p className="text-blue-800">Loading stock movement data...</p>
             </div>
           )}
 
-          {purchaseError && (
+          {stockMovementError && (
             <div className="mt-8 bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800">Error loading purchase data: {purchaseError}</p>
+              <p className="text-red-800">Error loading stock movement data: {stockMovementError}</p>
             </div>
           )}
 
@@ -316,7 +303,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Wastages</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer IN</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer OUT</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Manufacturing Impact</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Manufacturing</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Closing Stock</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -324,12 +311,18 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                   {warehouseData.length > 0 ? (
                     <>
                       {warehouseData.map((row, index) => {
-                        const purchase = purchaseData.find((p) => p.warehouse_code === row.warehouseCode);
-                        const purchases = purchase ? purchase.total_quantity : 0;
-                        const purchaseReturn = purchaseReturnData.find((p) => p.warehouse_code === row.warehouseCode);
-                        const purchasesReturn = purchaseReturn ? purchaseReturn.total_quantity : 0;
-
-                        const closingStock = row.openingStock + purchases - row.sales - row.purchaseReturns + row.transferIN - row.transferOUT + row.manufacturing - row.wastages;
+                        const movements = getWarehouseMovements(row.warehouseCode);
+                        
+                        const closingStock = Math.max(0, 
+                          row.openingStock 
+                          + movements.purchases 
+                          + movements.transfer_in 
+                          + movements.manufacturing 
+                          - movements.sales 
+                          - movements.purchase_returns 
+                          - movements.transfer_out 
+                          - movements.wastages
+                        );
 
                         return (
                           <TableRow key={index} className="hover:bg-gray-50">
@@ -342,13 +335,13 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                               </div>
                             </TableCell>
                             <TableCell className="text-center text-blue-600">{row.openingStock}</TableCell>
-                            <TableCell className="text-center text-orange-600">{purchases}</TableCell>
-                            <TableCell className="text-center text-orange-600">{purchasesReturn}</TableCell>
-                            <TableCell className="text-center text-red-600 font-medium">{row.sales}</TableCell>
-                            <TableCell className="text-center text-sm text-gray-500">{row.wastages}</TableCell>
-                            <TableCell className="text-center text-sm text-gray-500">{row.transferIN}</TableCell>
-                            <TableCell className="text-center text-sm text-gray-500">{row.transferOUT}</TableCell>
-                            <TableCell className="text-center text-sm text-gray-500">{row.manufacturing}</TableCell>
+                            <TableCell className="text-center text-green-600">{movements.purchases}</TableCell>
+                            <TableCell className="text-center text-orange-600">{movements.purchase_returns}</TableCell>
+                            <TableCell className="text-center text-red-600 font-medium">{movements.sales}</TableCell>
+                            <TableCell className="text-center text-red-500">{movements.wastages}</TableCell>
+                            <TableCell className="text-center text-green-500">{movements.transfer_in}</TableCell>
+                            <TableCell className="text-center text-red-500">{movements.transfer_out}</TableCell>
+                            <TableCell className="text-center text-blue-500">{movements.manufacturing}</TableCell>
                             <TableCell className="text-center font-medium text-blue-600">{closingStock}</TableCell>
                           </TableRow>
                         );
@@ -360,10 +353,10 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                         <TableCell className="text-center font-bold text-green-600">{totals.totalPurchases}</TableCell>
                         <TableCell className="text-center font-bold text-orange-600">{totals.totalPurchaseReturns}</TableCell>
                         <TableCell className="text-center font-bold text-red-600">{totals.totalSales}</TableCell>
-                        <TableCell className="text-center font-bold">{totals.totalWastages}</TableCell>
-                        <TableCell className="text-center font-bold">{totals.totalTransferIN}</TableCell>
-                        <TableCell className="text-center font-bold">{totals.totalTransferOUT}</TableCell>
-                        <TableCell className="text-center font-bold">{totals.totalManufacturing}</TableCell>
+                        <TableCell className="text-center font-bold text-red-500">{totals.totalWastages}</TableCell>
+                        <TableCell className="text-center font-bold text-green-500">{totals.totalTransferIN}</TableCell>
+                        <TableCell className="text-center font-bold text-red-500">{totals.totalTransferOUT}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-500">{totals.totalManufacturing}</TableCell>
                         <TableCell className="text-center font-bold text-blue-600">{totals.totalClosingStock}</TableCell>
                       </TableRow>
                     </>

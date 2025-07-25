@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase-client"
-import type { InventoryWithDetails, PurchaseDetailsResponse, PurchaseReturns, PurchaseReturnsResponse } from "@/lib/supabase"
+import type { InventoryWithDetails, StockMovementDetailsResponse } from "@/lib/supabase"
+
+export type { StockMovementDetailsResponse } from "@/lib/supabase"
 
 export class InventoryAPI {
   static async getInventoryWithWarehouses(page = 1, limit = 30): Promise<{
@@ -131,12 +133,12 @@ export class SearchInventory {
   }
 }
 
-export class PurchaseDetailsService {
-  static async getPurchaseDetails(
+export class StockMovementService {
+  static async getStockMovementDetails(
     product_id: string,
     month: number,
     year: number
-  ): Promise<{ data: PurchaseDetailsResponse[] }> { // Fixed return type
+  ): Promise<{ data: StockMovementDetailsResponse[] }> {
     try {
       const startDate = `${year}-${String(month).padStart(2, "0")}-01`
       const endDate = new Date(year, month, 0).toISOString().split("T")[0]
@@ -145,61 +147,11 @@ export class PurchaseDetailsService {
         .from("stock_movements")
         .select(`
           quantity,
-          warehouse_dest_id,
-          warehouses!warehouse_dest_id(code)
-        `)
-        .eq("product_id", product_id)
-        .gte("date", startDate)
-        .lte("date", endDate)
-
-      if (error) throw error
-
-      const groupedData: Record<string, number> = {}
-      console.log("Data fetched:", data)
-
-      for (const row of data || []) {
-        // Handle both array and object cases for warehouses
-        const warehouse_code = Array.isArray(row.warehouses) 
-          ? row.warehouses[0]?.code || "Unknown"
-          : (row.warehouses as any)?.code || "Unknown"
-        groupedData[warehouse_code] =
-          (groupedData[warehouse_code] || 0) + (row.quantity || 0)
-      }
-
-      console.log("Grouped data:", groupedData)
-
-      // Convert to array with proper typing
-      const result: PurchaseDetailsResponse[] = Object.entries(groupedData).map(
-        ([warehouse_code, total_quantity]) => ({
-          warehouse_code,
-          total_quantity,
-        })
-      )
-
-      return { data: result }
-    } catch (error) {
-      console.error("Error in getPurchaseDetails:", error)
-      throw error
-    }
-  }
-}
-
-export class PurchaseReturnsService {
-  static async getPurchaseReturns(
-    product_id: string,
-    month: number,
-    year: number
-  ): Promise<{ data: PurchaseReturnsResponse[] }> {
-    try {
-      const startDate = `${year}-${String(month).padStart(2, "0")}-01`
-      const endDate = new Date(year, month, 0).toISOString().split("T")[0]
-
-      const { data, error } = await supabase
-        .from("stock_movements")
-        .select(`
-          quantity,
+          movement_type,
           warehouse_id,
-          warehouses!warehouse_id(code)
+          warehouse_dest_id,
+          warehouse_source:warehouses!warehouse_id(code),
+          warehouse_dest:warehouses!warehouse_dest_id(code)
         `)
         .eq("product_id", product_id)
         .gte("date", startDate)
@@ -207,30 +159,124 @@ export class PurchaseReturnsService {
 
       if (error) throw error
 
-      const groupedData: Record<string, number> = {}
-     
-      for (const row of data || []) {
-        // Handle both array and object cases for warehouses
-        const warehouse_code = Array.isArray(row.warehouses) 
-          ? row.warehouses[0]?.code || "Unknown"
-          : (row.warehouses as any)?.code || "Unknown"
-        groupedData[warehouse_code] =
-          (groupedData[warehouse_code] || 0) + (row.quantity || 0)
+      console.log("Raw stock movement data:", data)
+
+      // Group data by warehouse code and movement type
+      const warehouseMovements: Record<string, {
+        purchases: number
+        sales: number
+        purchase_returns: number
+        wastages: number
+        transfer_in: number
+        transfer_out: number
+        manufacturing: number
+      }> = {}
+
+      // Initialize warehouse movement tracking
+      const initializeWarehouse = (warehouseCode: string) => {
+        if (!warehouseMovements[warehouseCode]) {
+          warehouseMovements[warehouseCode] = {
+            purchases: 0,
+            sales: 0,
+            purchase_returns: 0,
+            wastages: 0,
+            transfer_in: 0,
+            transfer_out: 0,
+            manufacturing: 0
+          }
+        }
       }
 
-      // Convert to array with proper typing
-      const result: PurchaseDetailsResponse[] = Object.entries(groupedData).map(
-        ([warehouse_code, total_quantity]) => ({
+      // Helper to robustly extract warehouse code
+      const getWarehouseCode = (wh: any) => {
+        if (!wh) return undefined;
+        if (Array.isArray(wh)) return wh[0]?.code;
+        return wh.code;
+      }
+
+      // Process each stock movement
+      for (const movement of data || []) {
+        const { quantity, movement_type, warehouse_id, warehouse_dest_id } = movement
+        const sourceWarehouseCode = getWarehouseCode(movement.warehouse_source)
+        const destWarehouseCode = getWarehouseCode(movement.warehouse_dest)
+       
+        switch (movement_type) {
+          case "purchase":
+            // Purchases add to warehouse_dest_id
+            if (destWarehouseCode) {
+              initializeWarehouse(destWarehouseCode)
+              warehouseMovements[destWarehouseCode].purchases += quantity || 0
+            }
+            break
+
+          case "sale":
+            // Sales subtract from warehouse_id
+            if (sourceWarehouseCode) {
+              initializeWarehouse(sourceWarehouseCode)
+              warehouseMovements[sourceWarehouseCode].sales += quantity || 0
+            }
+            break
+
+          case "purchase_return":
+            // Purchase returns subtract from warehouse_id
+            if (sourceWarehouseCode) {
+              initializeWarehouse(sourceWarehouseCode)
+              warehouseMovements[sourceWarehouseCode].purchase_returns += quantity || 0
+            }
+            break
+
+          case "transfer_in":
+          case "transfer_out":
+            if (sourceWarehouseCode && destWarehouseCode) {
+              initializeWarehouse(destWarehouseCode)
+              warehouseMovements[destWarehouseCode].transfer_in += quantity || 0
+
+              initializeWarehouse(sourceWarehouseCode)
+              warehouseMovements[sourceWarehouseCode].transfer_out += quantity || 0
+            }
+            break
+
+          case "manufacturing":
+            // Manufacturing adds to warehouse_dest_id
+            if (destWarehouseCode) {
+              initializeWarehouse(destWarehouseCode)
+              warehouseMovements[destWarehouseCode].manufacturing += quantity || 0
+            }
+            break
+
+          case "wastage":
+            // Wastage subtracts from warehouse_id
+            if (sourceWarehouseCode) {
+              initializeWarehouse(sourceWarehouseCode)
+              warehouseMovements[sourceWarehouseCode].wastages += quantity || 0
+            }
+            break
+
+          default:
+            console.warn(`Unknown movement type: ${movement_type}`)
+        }
+      }
+
+      console.log("Processed warehouse movements:", warehouseMovements)
+
+      // Convert to response format
+      const result: StockMovementDetailsResponse[] = Object.entries(warehouseMovements).map(
+        ([warehouse_code, movements]) => ({
           warehouse_code,
-          total_quantity,
+          purchases: movements.purchases,
+          sales: movements.sales,
+          purchase_returns: movements.purchase_returns,
+          wastages: movements.wastages,
+          transfer_in: movements.transfer_in,
+          transfer_out: movements.transfer_out,
+          manufacturing: movements.manufacturing
         })
       )
 
       return { data: result }
     } catch (error) {
-      console.error("Error in getPurchaseReturns:", error)
+      console.error("Error in getStockMovementDetails:", error)
       throw error
     }
   }
 }
-

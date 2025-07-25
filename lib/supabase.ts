@@ -145,7 +145,7 @@ export interface InventoryWithDetails {
       id: string
       name: string
       code: string
-    }[] // Handle both single object and array from Supabase join
+    }[]
   }[]
 }
 
@@ -156,32 +156,37 @@ export interface DashboardStats {
   total_value: number
 }
 
-export interface PurchaseDetails {
+export interface ProductDetails {
   product_id: number
   quantity: number
+  movement_type: "purchase" | "sale" | "transfer_in" | "transfer_out" | "manufacturing" | "wastage" | "purchase_return"
+  warehouse_id: number
   warehouse_dest_id: number
   warehouses: {
     code: string
   }
 }
 
+export interface StockMovementDetailsResponse {
+  warehouse_code: string
+  purchases: number
+  sales: number
+  purchase_returns: number
+  wastages: number
+  transfer_in: number
+  transfer_out: number
+  manufacturing: number
+}
 
-export interface PurchaseReturns {
-  product_id: number
+export interface StockMovementData {
   quantity: number
+  movement_type: "purchase" | "sale" | "transfer_in" | "transfer_out" | "manufacturing" | "wastage" | "purchase_return"
   warehouse_id: number
-  warehouses: {
+  warehouse_dest_id: number | null
+  warehouse_source: {
     code: string
-  }
-}
-
-// Additional interface for the purchase details API response
-export interface PurchaseDetailsResponse {
-  warehouse_code: string
-  total_quantity: number
-}
-
-export interface PurchaseReturnsResponse {
-  warehouse_code: string
-  total_quantity: number
+  } | null
+  warehouse_dest: {
+    code: string
+  } | null
 }
