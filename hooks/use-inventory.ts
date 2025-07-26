@@ -19,7 +19,8 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
   const fetchInventory = async () => {
     try {
       if (searchQuery) {
-        const { data, total } = await SearchInventory.searchInventory(searchQuery, page, itemsPerPage)
+        // Fetch all matching items when searching
+        const { data, total } = await SearchInventory.searchInventory(searchQuery, 1, 1000)
         setInventory(data as InventoryWithDetails[])
         setTotalItems(total)
       } else {
@@ -59,10 +60,9 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
     }
   }, [page, searchQuery])
 
-  const searchInventory = async (query: string) => {
+  const searchInventory = (query: string) => {
     setIsSearching(true)
     setSearchQuery(query)
-    setPage(1)
   }
 
   return {

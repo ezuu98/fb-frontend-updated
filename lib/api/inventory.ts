@@ -4,51 +4,106 @@ import type { InventoryWithDetails, StockMovementDetailsResponse } from "@/lib/s
 export type { StockMovementDetailsResponse } from "@/lib/supabase"
 
 export class InventoryAPI {
-  static async getInventoryWithWarehouses(page = 1, limit = 30): Promise<{
+  static async getInventoryWithWarehouses(): Promise<{
     data: InventoryWithDetails[]
     total: number
   }> {
     try {
-      const from = (page - 1) * limit
-      const to = from + limit - 1
+      const batchSize = 1000
+      let allMergedData: InventoryWithDetails[] = []
 
-      const { data, error, count } = await supabase
+      const { count, error: countError } = await supabase
         .from("inventory")
-        .select(`
-          odoo_id, name, barcode, uom_name, standard_price, reordering_min_qty, reordering_max_qty, list_price,
-          category:categories(display_name, active, name)
-        `, { count: "exact" })
+        .select("odoo_id", { count: "exact", head: true })
         .eq("active", true)
         .eq("type", "product")
-        .order("name", { ascending: true })
-        .range(from, to)
 
-      if (error) throw error
+      if (countError) throw countError
+      const total = typeof count === "number" ? count : 0
 
-      const odooIds = (data || []).map(item => item.odoo_id)
+      for (let from = 0; from < total; from += batchSize) {
+        const to = from + batchSize - 1
 
-      const { data: warehouseInventory, error: whError } = await supabase
-        .from("warehouse_inventory")
-        .select(`
+        const { data: inventoryBatch, error: inventoryError } = await supabase
+          .from("inventory")
+          .select(`
+          odoo_id, name, barcode, uom_name, standard_price, reordering_min_qty, reordering_max_qty, list_price,
+          category:categories(display_name, active, name)
+        `)
+          .eq("active", true)
+          .eq("type", "product")
+          .order("name", { ascending: true })
+          .range(from, to)
+
+        if (inventoryError) throw inventoryError
+
+        const odooIds = (inventoryBatch || []).map(item => item.odoo_id)
+
+        const { data: warehouseInventory, error: whError } = await supabase
+          .from("warehouse_inventory")
+          .select(`
           product_id,
           quantity,
           warehouse:warehouses(id, name, code)
         `)
-        .in("product_id", odooIds)
+          .in("product_id", odooIds)
 
-      if (whError) throw whError
+        if (whError) throw whError
 
-      const merged: InventoryWithDetails[] = (data || []).map(item => ({
-        ...item,
-        warehouse_inventory: (warehouseInventory?.filter(wi => wi.product_id === item.odoo_id) || []).map(wi => ({
-          ...wi,
-          warehouse: Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse
-        })),
-      }))
+        const { data: stockMovements, error: stockError } = await supabase
+          .from("stock_movements")
+          .select(`product_id, movement_type, quantity, warehouse_id, warehouse_dest_id`)
+          .in("product_id", odooIds)
+
+        if (stockError) throw stockError
+
+        const stockMap = new Map<string, Map<string, number>>()
+
+        for (const move of stockMovements || []) {
+          const { product_id, movement_type, quantity, warehouse_id, warehouse_dest_id } = move
+          if (!product_id || !quantity) continue
+
+          const updateWarehouseStock = (productId: string, warehouseId: string, qtyDelta: number) => {
+            if (!stockMap.has(productId)) stockMap.set(productId, new Map())
+            const warehouseMap = stockMap.get(productId)!
+            warehouseMap.set(warehouseId, (warehouseMap.get(warehouseId) || 0) + qtyDelta)
+          }
+
+          if (movement_type === "purchase") {
+            if (warehouse_dest_id) updateWarehouseStock(product_id, warehouse_dest_id, quantity)
+          } else if (movement_type === "purchase_return") {
+            if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
+          } else if (movement_type === "sale") {
+            if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
+          } else if (movement_type === "transfer_in") {
+            if (warehouse_dest_id) updateWarehouseStock(product_id, warehouse_dest_id, quantity)
+            if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
+          } else if (movement_type === "manufacturing") {
+            if (warehouse_dest_id) updateWarehouseStock(product_id, warehouse_dest_id, quantity)
+          } else if (movement_type === "wastage") {
+            if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
+          }
+        }
+
+        const mergedBatch: InventoryWithDetails[] = (inventoryBatch || []).map(item => {
+          const mergedInventory = (warehouseInventory?.filter(wi => wi.product_id === item.odoo_id) || []).map(wi => ({
+            ...wi,
+            warehouse: Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse,
+            stock_quantity: stockMap.get(item.odoo_id)?.get((Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse).id) || 0,
+          }))
+
+          return {
+            ...item,
+            warehouse_inventory: mergedInventory,
+          }
+        })
+
+        allMergedData = allMergedData.concat(mergedBatch)
+      }
 
       return {
-        data: merged,
-        total: count || 0,
+        data: allMergedData,
+        total,
       }
     } catch (error) {
       console.error("Error in getInventoryWithWarehouses:", error)
@@ -79,56 +134,32 @@ export class InventoryAPI {
 }
 
 export class SearchInventory {
-  static async searchInventory(query: string, page = 1, limit = 30): Promise<{
-    data: InventoryWithDetails[] // Fixed return type
+  static searchFromCache(
+    allInventory: InventoryWithDetails[],
+    query: string,
+    page = 1,
+    limit = 30
+  ): {
+    data: InventoryWithDetails[]
     total: number
-  }> {
-    try {
-      const from = (page - 1) * limit
-      const to = from + limit - 1
+  } {
+    // Normalize search query
+    const lowerQuery = query.trim().toLowerCase()
 
-      const { data: inventoryData, error, count } = await supabase
-        .from("inventory")
-        .select(`
-          *,
-          category:categories(*)
-        `, { count: "exact" })
-        .or(`name.ilike.${query}%,barcode.ilike.%${query}%`)
-        .eq("active", true)
-        .eq("type", "product")
-        .order("name", { ascending: true })
-        .range(from, to)
+    // Filter the full dataset
+    const filtered = allInventory.filter(item =>
+      item.name.toLowerCase().startsWith(lowerQuery)
+    )
 
-      if (error) throw error
+    const total = filtered.length
 
-      const odooIds = (inventoryData || []).map(item => item.odoo_id)
+    // Paginate
+    const from = (page - 1) * limit
+    const to = from + limit
 
-      const { data: warehouseInventory, error: whError } = await supabase
-        .from("warehouse_inventory")
-        .select(`
-          product_id,
-          quantity,
-          warehouse:warehouses(id, name, code)
-        `)
-        .in("product_id", odooIds)
-
-      if (whError) throw whError
-
-      const merged: InventoryWithDetails[] = (inventoryData || []).map(item => ({
-        ...item,
-        warehouse_inventory: (warehouseInventory?.filter(wi => wi.product_id === item.odoo_id) || []).map(wi => ({
-          ...wi,
-          warehouse: Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse
-        })),
-      }))
-
-      return {
-        data: merged,
-        total: count || 0,
-      }
-    } catch (error) {
-      console.error("Error in searchInventory:", error)
-      throw error
+    return {
+      data: filtered.slice(from, to),
+      total
     }
   }
 }
@@ -166,7 +197,7 @@ export class StockMovementService {
         purchases: number
         sales: number
         purchase_returns: number
-        wastages: number
+        wastage: number
         transfer_in: number
         transfer_out: number
         manufacturing: number
@@ -179,7 +210,7 @@ export class StockMovementService {
             purchases: 0,
             sales: 0,
             purchase_returns: 0,
-            wastages: 0,
+            wastage: 0,
             transfer_in: 0,
             transfer_out: 0,
             manufacturing: 0
@@ -199,7 +230,7 @@ export class StockMovementService {
         const { quantity, movement_type, warehouse_id, warehouse_dest_id } = movement
         const sourceWarehouseCode = getWarehouseCode(movement.warehouse_source)
         const destWarehouseCode = getWarehouseCode(movement.warehouse_dest)
-       
+
         switch (movement_type) {
           case "purchase":
             // Purchases add to warehouse_dest_id
@@ -248,7 +279,7 @@ export class StockMovementService {
             // Wastage subtracts from warehouse_id
             if (sourceWarehouseCode) {
               initializeWarehouse(sourceWarehouseCode)
-              warehouseMovements[sourceWarehouseCode].wastages += quantity || 0
+              warehouseMovements[sourceWarehouseCode].wastage += quantity || 0
             }
             break
 
@@ -266,7 +297,7 @@ export class StockMovementService {
           purchases: movements.purchases,
           sales: movements.sales,
           purchase_returns: movements.purchase_returns,
-          wastages: movements.wastages,
+          wastages: movements.wastage,
           transfer_in: movements.transfer_in,
           transfer_out: movements.transfer_out,
           manufacturing: movements.manufacturing
