@@ -73,14 +73,16 @@ export class InventoryAPI {
             if (warehouse_dest_id) updateWarehouseStock(product_id, warehouse_dest_id, quantity)
           } else if (movement_type === "purchase_return") {
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
-          } else if (movement_type === "sale") {
+          } else if (movement_type === "sales") {
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
+          } else if (movement_type === "sales_return") {
+            if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, +quantity)
           } else if (movement_type === "transfer_in") {
             if (warehouse_dest_id) updateWarehouseStock(product_id, warehouse_dest_id, quantity)
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
           } else if (movement_type === "manufacturing") {
-            if (warehouse_dest_id) updateWarehouseStock(product_id, warehouse_dest_id, quantity)
-          } else if (movement_type === "wastage") {
+            if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, quantity)
+          } else if (movement_type === "wastages") {
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
           }
         }
@@ -121,6 +123,8 @@ export class InventoryAPI {
       if (error) throw error
 
       const { low_stock_count, out_of_stock_count } = data[0] || {}
+      console.log("sadiq")
+      console.log(out_of_stock_count)
 
       return {
         lowStockCount: low_stock_count || 0,
@@ -143,17 +147,13 @@ export class SearchInventory {
     data: InventoryWithDetails[]
     total: number
   } {
-    // Normalize search query
     const lowerQuery = query.trim().toLowerCase()
-
-    // Filter the full dataset
     const filtered = allInventory.filter(item =>
       item.name.toLowerCase().startsWith(lowerQuery)
     )
 
     const total = filtered.length
 
-    // Paginate
     const from = (page - 1) * limit
     const to = from + limit
 
@@ -194,10 +194,11 @@ export class StockMovementService {
 
       // Group data by warehouse code and movement type
       const warehouseMovements: Record<string, {
-        purchases: number
+        purchase: number
+        purchase_return: number
         sales: number
-        purchase_returns: number
-        wastage: number
+        sales_return: number
+        wastages: number
         transfer_in: number
         transfer_out: number
         manufacturing: number
@@ -207,10 +208,11 @@ export class StockMovementService {
       const initializeWarehouse = (warehouseCode: string) => {
         if (!warehouseMovements[warehouseCode]) {
           warehouseMovements[warehouseCode] = {
-            purchases: 0,
+            purchase: 0,
+            purchase_return: 0,
             sales: 0,
-            purchase_returns: 0,
-            wastage: 0,
+            sales_return: 0,
+            wastages: 0,
             transfer_in: 0,
             transfer_out: 0,
             manufacturing: 0
@@ -218,7 +220,6 @@ export class StockMovementService {
         }
       }
 
-      // Helper to robustly extract warehouse code
       const getWarehouseCode = (wh: any) => {
         if (!wh) return undefined;
         if (Array.isArray(wh)) return wh[0]?.code;
@@ -233,18 +234,9 @@ export class StockMovementService {
 
         switch (movement_type) {
           case "purchase":
-            // Purchases add to warehouse_dest_id
             if (destWarehouseCode) {
               initializeWarehouse(destWarehouseCode)
-              warehouseMovements[destWarehouseCode].purchases += quantity || 0
-            }
-            break
-
-          case "sale":
-            // Sales subtract from warehouse_id
-            if (sourceWarehouseCode) {
-              initializeWarehouse(sourceWarehouseCode)
-              warehouseMovements[sourceWarehouseCode].sales += quantity || 0
+              warehouseMovements[destWarehouseCode].purchase += quantity || 0
             }
             break
 
@@ -252,9 +244,26 @@ export class StockMovementService {
             // Purchase returns subtract from warehouse_id
             if (sourceWarehouseCode) {
               initializeWarehouse(sourceWarehouseCode)
-              warehouseMovements[sourceWarehouseCode].purchase_returns += quantity || 0
+              warehouseMovements[sourceWarehouseCode].purchase_return += quantity || 0
             }
             break
+
+          case "sales":
+            // Sales subtract from warehouse_id
+            if (sourceWarehouseCode) {
+              initializeWarehouse(sourceWarehouseCode)
+              warehouseMovements[sourceWarehouseCode].sales -= quantity || 0
+            }
+            break
+
+          case "sales_return":
+            // Sales subtract from warehouse_id
+            if (sourceWarehouseCode) {
+              initializeWarehouse(sourceWarehouseCode)
+              warehouseMovements[sourceWarehouseCode].sales_return += quantity || 0
+            }
+            break
+
 
           case "transfer_in":
           case "transfer_out":
@@ -263,23 +272,22 @@ export class StockMovementService {
               warehouseMovements[destWarehouseCode].transfer_in += quantity || 0
 
               initializeWarehouse(sourceWarehouseCode)
-              warehouseMovements[sourceWarehouseCode].transfer_out += quantity || 0
+              warehouseMovements[sourceWarehouseCode].transfer_out -= quantity || 0
             }
             break
 
           case "manufacturing":
             // Manufacturing adds to warehouse_dest_id
-            if (destWarehouseCode) {
-              initializeWarehouse(destWarehouseCode)
-              warehouseMovements[destWarehouseCode].manufacturing += quantity || 0
+            if (sourceWarehouseCode) {
+              initializeWarehouse(sourceWarehouseCode)
+              warehouseMovements[sourceWarehouseCode].manufacturing += quantity || 0
             }
             break
 
-          case "wastage":
-            // Wastage subtracts from warehouse_id
+          case "wastages":
             if (sourceWarehouseCode) {
               initializeWarehouse(sourceWarehouseCode)
-              warehouseMovements[sourceWarehouseCode].wastage += quantity || 0
+              warehouseMovements[sourceWarehouseCode].wastages -= quantity || 0
             }
             break
 
@@ -294,10 +302,11 @@ export class StockMovementService {
       const result: StockMovementDetailsResponse[] = Object.entries(warehouseMovements).map(
         ([warehouse_code, movements]) => ({
           warehouse_code,
-          purchases: movements.purchases,
+          purchases: movements.purchase,
+          purchase_returns: movements.purchase_return,
           sales: movements.sales,
-          purchase_returns: movements.purchase_returns,
-          wastages: movements.wastage,
+          sales_return: movements.sales_return,
+          wastages: movements.wastages,
           transfer_in: movements.transfer_in,
           transfer_out: movements.transfer_out,
           manufacturing: movements.manufacturing
