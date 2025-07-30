@@ -90,11 +90,18 @@ export class InventoryAPI {
         }
 
         const mergedBatch: InventoryWithDetails[] = (inventoryBatch || []).map(item => {
-          const mergedInventory = (warehouseInventory?.filter(wi => wi.product_id === item.odoo_id) || []).map(wi => ({
-            ...wi,
-            warehouse: Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse,
-            stock_quantity: stockMap.get(item.odoo_id)?.get((Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse).id) || 0,
-          }))
+          const mergedInventory = (warehouseInventory?.filter(wi => wi.product_id === item.odoo_id) || []).map(wi => {
+            const warehouseObj = Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse;
+            const openingStock = wi.quantity || 0;
+            const movementStock = stockMap.get(item.odoo_id)?.get(warehouseObj.id) || 0;
+            const calculatedStock = openingStock + movementStock;
+            
+            return {
+              ...wi,
+              warehouse: warehouseObj,
+              stock_quantity: calculatedStock,
+            }
+          })
           
           return {
             ...item,
