@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase-client"
 import type { InventoryWithDetails, StockMovementDetailsResponse } from "@/lib/supabase"
+import { all } from "axios"
 
 export type { StockMovementDetailsResponse } from "@/lib/supabase"
 
@@ -56,14 +57,15 @@ export class InventoryAPI {
           .in("product_id", odooIds)
 
         if (stockError) throw stockError
+        
 
-        const stockMap = new Map<string, Map<string, number>>()
+        const stockMap = new Map<number, Map<number, number>>()
 
         for (const move of stockMovements || []) {
           const { product_id, movement_type, quantity, warehouse_id, warehouse_dest_id } = move
           if (!product_id || !quantity) continue
 
-          const updateWarehouseStock = (productId: string, warehouseId: string, qtyDelta: number) => {
+          const updateWarehouseStock = (productId: number, warehouseId: number, qtyDelta: number) => {
             if (!stockMap.has(productId)) stockMap.set(productId, new Map())
             const warehouseMap = stockMap.get(productId)!
             warehouseMap.set(warehouseId, (warehouseMap.get(warehouseId) || 0) + qtyDelta)
@@ -75,7 +77,7 @@ export class InventoryAPI {
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
           } else if (movement_type === "sales") {
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
-          } else if (movement_type === "sales_return") {
+          } else if (movement_type === "sales_returns") {
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, +quantity)
           } else if (movement_type === "transfer_in") {
             if (warehouse_dest_id) updateWarehouseStock(product_id, warehouse_dest_id, quantity)
@@ -93,16 +95,16 @@ export class InventoryAPI {
             warehouse: Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse,
             stock_quantity: stockMap.get(item.odoo_id)?.get((Array.isArray(wi.warehouse) ? wi.warehouse[0] : wi.warehouse).id) || 0,
           }))
-
+          
           return {
             ...item,
             warehouse_inventory: mergedInventory,
           }
         })
-
+        console.log(mergedBatch)
         allMergedData = allMergedData.concat(mergedBatch)
       }
-
+      
       return {
         data: allMergedData,
         total,
@@ -123,9 +125,7 @@ export class InventoryAPI {
       if (error) throw error
 
       const { low_stock_count, out_of_stock_count } = data[0] || {}
-      console.log("sadiq")
-      console.log(out_of_stock_count)
-
+      
       return {
         lowStockCount: low_stock_count || 0,
         outOfStockCount: out_of_stock_count || 0,
@@ -197,7 +197,7 @@ export class StockMovementService {
         purchase: number
         purchase_return: number
         sales: number
-        sales_return: number
+        sales_returns: number
         wastages: number
         transfer_in: number
         transfer_out: number
@@ -211,7 +211,7 @@ export class StockMovementService {
             purchase: 0,
             purchase_return: 0,
             sales: 0,
-            sales_return: 0,
+            sales_returns: 0,
             wastages: 0,
             transfer_in: 0,
             transfer_out: 0,
@@ -260,7 +260,7 @@ export class StockMovementService {
             // Sales subtract from warehouse_id
             if (sourceWarehouseCode) {
               initializeWarehouse(sourceWarehouseCode)
-              warehouseMovements[sourceWarehouseCode].sales_return += quantity || 0
+              warehouseMovements[sourceWarehouseCode].sales_returns += quantity || 0
             }
             break
 
@@ -305,7 +305,7 @@ export class StockMovementService {
           purchases: movements.purchase,
           purchase_returns: movements.purchase_return,
           sales: movements.sales,
-          sales_return: movements.sales_return,
+          sales_returns: movements.sales_returns,
           wastages: movements.wastages,
           transfer_in: movements.transfer_in,
           transfer_out: movements.transfer_out,

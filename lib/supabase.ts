@@ -171,6 +171,7 @@ export interface StockMovementDetailsResponse {
   warehouse_code: string
   purchases: number
   sales: number
+  sales_returns: number
   purchase_returns: number
   wastages: number
   transfer_in: number

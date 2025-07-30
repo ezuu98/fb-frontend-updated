@@ -56,8 +56,9 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     return movement || {
       warehouse_code: warehouseCode,
       purchases: 0,
-      sales: 0,
       purchase_returns: 0,
+      sales: 0,
+      sales_returns: 0,
       wastages: 0,
       transfer_in: 0,
       transfer_out: 0,
@@ -71,6 +72,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     let totalPurchases = 0;
     let totalSales = 0;
     let totalPurchaseReturns = 0;
+    let totalSalesReturns = 0;
     let totalWastages = 0;
     let totalTransferIN = 0;
     let totalTransferOUT = 0;
@@ -82,32 +84,35 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
       totalOpeningStock += row.openingStock;
       totalPurchases += movements.purchases;
-      totalSales += movements.sales;
-      totalPurchaseReturns += movements.purchase_returns;
-      totalWastages += movements.wastages;
+      totalPurchaseReturns += Math.abs(movements.purchase_returns);
+      totalSales += Math.abs(movements.sales);
+      totalSalesReturns += movements.sales_returns;
+      totalWastages += Math.abs(movements.wastages);
       totalTransferIN += movements.transfer_in;
-      totalTransferOUT += movements.transfer_out;
+      totalTransferOUT += Math.abs(movements.transfer_out);
       totalManufacturing += movements.manufacturing;
 
       // Calculate closing stock: 
       // opening + purchases + transfer_in + manufacturing - sales - purchase_returns - transfer_out - wastages
-      const closingStock = row.openingStock 
-        + movements.purchases 
-        + movements.transfer_in 
-        + movements.manufacturing 
-        - movements.sales 
-        - movements.purchase_returns 
-        - movements.transfer_out 
-        - movements.wastages;
-      
+      const closingStock = row.openingStock
+        + movements.purchases
+        + movements.transfer_in
+        + movements.manufacturing
+        + movements.sales_returns
+        - Math.abs(movements.sales)
+        - Math.abs(movements.purchase_returns)
+        - Math.abs(movements.transfer_out)
+        - Math.abs(movements.wastages);
+
       totalClosingStock += Math.max(0, closingStock); // Ensure no negative stock
     });
 
     return {
       totalOpeningStock,
       totalPurchases,
-      totalSales,
       totalPurchaseReturns,
+      totalSales,
+      totalSalesReturns,
       totalWastages,
       totalTransferIN,
       totalTransferOUT,
@@ -137,7 +142,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         setStockMovementLoading(false);
       }
     };
-    
+
     fetchStockMovementData();
   }, [sku.odoo_id, sku.id, selectedMonth, selectedYear]);
 
@@ -300,6 +305,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                     <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchases</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchase Returns</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Sales</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Sales Returns</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Wastages</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer IN</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer OUT</TableHead>
@@ -312,16 +318,17 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                     <>
                       {warehouseData.map((row, index) => {
                         const movements = getWarehouseMovements(row.warehouseCode);
-                        
-                        const closingStock = Math.max(0, 
-                          row.openingStock 
-                          + movements.purchases 
-                          + movements.transfer_in 
-                          + movements.manufacturing 
-                          - movements.sales 
-                          - movements.purchase_returns 
-                          - movements.transfer_out 
-                          - movements.wastages
+
+                        const closingStock = Math.max(0,
+                          row.openingStock
+                          + movements.purchases
+                          + movements.transfer_in
+                          + movements.manufacturing
+                          + movements.sales_returns
+                          - Math.abs(movements.sales)
+                          - Math.abs(movements.purchase_returns)
+                          - Math.abs(movements.transfer_out)
+                          - Math.abs(movements.wastages)
                         );
 
                         return (
@@ -338,6 +345,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                             <TableCell className="text-center text-green-600">{movements.purchases}</TableCell>
                             <TableCell className="text-center text-orange-600">{movements.purchase_returns}</TableCell>
                             <TableCell className="text-center text-red-600 font-medium">{movements.sales}</TableCell>
+                            <TableCell className="text-center text-red-600 font-medium">{movements.sales_returns}</TableCell>
                             <TableCell className="text-center text-red-500">{movements.wastages}</TableCell>
                             <TableCell className="text-center text-green-500">{movements.transfer_in}</TableCell>
                             <TableCell className="text-center text-red-500">{movements.transfer_out}</TableCell>
@@ -353,6 +361,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                         <TableCell className="text-center font-bold text-green-600">{totals.totalPurchases}</TableCell>
                         <TableCell className="text-center font-bold text-orange-600">{totals.totalPurchaseReturns}</TableCell>
                         <TableCell className="text-center font-bold text-red-600">{totals.totalSales}</TableCell>
+                        <TableCell className="text-center font-bold text-red-600">{totals.totalSalesReturns}</TableCell>
                         <TableCell className="text-center font-bold text-red-500">{totals.totalWastages}</TableCell>
                         <TableCell className="text-center font-bold text-green-500">{totals.totalTransferIN}</TableCell>
                         <TableCell className="text-center font-bold text-red-500">{totals.totalTransferOUT}</TableCell>

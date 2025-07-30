@@ -20,11 +20,11 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
     try {
       if (searchQuery) {
         // Fetch all matching items when searching
-        const { data, total } = await SearchInventory.searchInventory(searchQuery, 1, 1000)
+        const { data, total } = await SearchInventory.searchFromCache(inventory, searchQuery)
         setInventory(data as InventoryWithDetails[])
         setTotalItems(total)
       } else {
-        const { data, total } = await InventoryAPI.getInventoryWithWarehouses(page, itemsPerPage)
+        const { data, total } = await InventoryAPI.getInventoryWithWarehouses()
         setInventory(data)
         setTotalItems(total)
       }

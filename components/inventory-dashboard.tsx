@@ -105,6 +105,8 @@ export function InventoryDashboard() {
 
   // Transform Supabase data for display
   const transformedInventory = useMemo(() => {
+    console.log("Raw inventory data:", inventory);
+    
     return inventory.map((item) => {
       const warehouseMap: Record<string, number> = {
         bdrwh: 0,
@@ -112,7 +114,7 @@ export function InventoryDashboard() {
         sbzwh: 0,
         cliwh: 0,
         bhdwh: 0,
-        ecmm: 0,
+        ecmwh: 0,
       };
 
       const validWarehouseCodes = Object.keys(warehouseMap);
@@ -121,7 +123,10 @@ export function InventoryDashboard() {
         const warehouseObj = Array.isArray(wh.warehouse) ? wh.warehouse[0] : wh.warehouse;
         const whCode = warehouseObj?.code?.toLowerCase();
         if (whCode && validWarehouseCodes.includes(whCode)) {
-          warehouseMap[whCode] = wh.quantity || 0;
+          // Use calculated stock quantity from movements if available, otherwise use static quantity
+          const stockQuantity = (wh as any).stock_quantity !== undefined ? (wh as any).stock_quantity : wh.quantity || 0;
+          warehouseMap[whCode] = stockQuantity;
+          console.log(`Warehouse ${whCode}: static qty=${wh.quantity}, calculated qty=${(wh as any).stock_quantity}, final=${stockQuantity}`);
         }
       });
 
@@ -138,7 +143,7 @@ export function InventoryDashboard() {
         sbzwh: warehouseMap.sbzwh,
         cliwh: warehouseMap.cliwh,
         bhdwh: warehouseMap.bhdwh,
-        ecmm: warehouseMap.ecmm,
+        ecmwh: warehouseMap.ecmwh,
         totalStock,
         isLowStock,
         reorderLevel: item.reordering_min_qty,
@@ -443,7 +448,7 @@ return (
                 <TableHead className="font-medium text-gray-700 text-center">SBZWH</TableHead>
                 <TableHead className="font-medium text-gray-700 text-center">CLIWH</TableHead>
                 <TableHead className="font-medium text-gray-700 text-center">BHDWH</TableHead>
-                <TableHead className="font-medium text-gray-700 text-center">ECMM</TableHead>
+                <TableHead className="font-medium text-gray-700 text-center">ECMWH</TableHead>
                 <TableHead className="font-medium text-gray-700 text-center">Status</TableHead>
                 <TableHead className="font-medium text-gray-700 text-center">Actions</TableHead>
               </TableRow>
@@ -470,7 +475,7 @@ return (
                   <TableCell className="text-center">{item.sbzwh}</TableCell>
                   <TableCell className="text-center">{item.cliwh}</TableCell>
                   <TableCell className="text-center">{item.bhdwh}</TableCell>
-                  <TableCell className="text-center">{item.ecmm}</TableCell>
+                  <TableCell className="text-center">{item.ecmwh}</TableCell>
                   <TableCell className="text-center">
                     {item.totalStock === 0 ? (
                       <Badge variant="destructive">Out of Stock</Badge>
