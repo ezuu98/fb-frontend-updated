@@ -134,7 +134,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
           selectedYear
         );
         setStockMovementData(response.data);
-        console.log("Stock movement data loaded:", response.data);
       } catch (err: any) {
         setStockMovementError(err.message || "Failed to fetch stock movement data");
         console.error("Stock movement data error:", err);

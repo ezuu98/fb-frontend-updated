@@ -108,7 +108,6 @@ export class InventoryAPI {
             warehouse_inventory: mergedInventory,
           }
         })
-        console.log(mergedBatch)
         allMergedData = allMergedData.concat(mergedBatch)
       }
       
@@ -127,15 +126,27 @@ export class InventoryAPI {
     outOfStockCount: number
   }> {
     try {
-      const { data, error } = await supabase.rpc("get_low_stock_count")
-
-      if (error) throw error
-
-      const { low_stock_count, out_of_stock_count } = data[0] || {}
+      const { data: inventoryData, total } = await this.getInventoryWithWarehouses()
       
+      let lowStockCount = 0
+      let outOfStockCount = 0
+
+      inventoryData.forEach(item => {
+        const totalStock = item.warehouse_inventory?.reduce((sum, wh) => {
+          const stockQuantity = (wh as any).stock_quantity !== undefined ? (wh as any).stock_quantity : wh.quantity || 0
+          return sum + stockQuantity
+        }, 0) || 0
+
+        if (totalStock === 0) {
+          outOfStockCount++
+        } else if (totalStock < item.reordering_min_qty) {
+          lowStockCount++
+        }
+      })
+
       return {
-        lowStockCount: low_stock_count || 0,
-        outOfStockCount: out_of_stock_count || 0,
+        lowStockCount,
+        outOfStockCount,
       }
     } catch (error) {
       console.error("Error in lowStockCount:", error)
@@ -197,8 +208,7 @@ export class StockMovementService {
 
       if (error) throw error
 
-      console.log("Raw stock movement data:", data)
-
+     
       // Group data by warehouse code and movement type
       const warehouseMovements: Record<string, {
         purchase: number
@@ -302,8 +312,6 @@ export class StockMovementService {
             console.warn(`Unknown movement type: ${movement_type}`)
         }
       }
-
-      console.log("Processed warehouse movements:", warehouseMovements)
 
       // Convert to response format
       const result: StockMovementDetailsResponse[] = Object.entries(warehouseMovements).map(

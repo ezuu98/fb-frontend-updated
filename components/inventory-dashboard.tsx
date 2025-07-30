@@ -45,8 +45,7 @@ export function InventoryDashboard() {
   const [selectedSku, setSelectedSku] = useState<InventoryWithDetails | null>(null)
   const [showOdooSync, setShowOdooSync] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState<string>("");
-  const [selectedYear, setSelectedYear] = useState<string>("");
-
+  
   const itemsPerPage = 30
 
   const {
@@ -94,19 +93,15 @@ export function InventoryDashboard() {
 
   // Handle pagination
   const handleNextPage = () => {
-    console.log("Next page clicked, current page:", page)
     setPage(page + 1)
   }
 
   const handlePreviousPage = () => {
-    console.log("Previous page clicked, current page:", page)
     setPage(page - 1)
   }
 
   // Transform Supabase data for display
-  const transformedInventory = useMemo(() => {
-    console.log("Raw inventory data:", inventory);
-    
+  const transformedInventory = useMemo(() => {  
     return inventory.map((item) => {
       const warehouseMap: Record<string, number> = {
         bdrwh: 0,
@@ -126,7 +121,6 @@ export function InventoryDashboard() {
           // Use calculated stock quantity from movements if available, otherwise use static quantity
           const stockQuantity = (wh as any).stock_quantity !== undefined ? (wh as any).stock_quantity : wh.quantity || 0;
           warehouseMap[whCode] = stockQuantity;
-          console.log(`Warehouse ${whCode}: static qty=${wh.quantity}, calculated qty=${(wh as any).stock_quantity}, final=${stockQuantity}`);
         }
       });
 
@@ -381,7 +375,6 @@ return (
                 <Select value={category} onValueChange={setCategory}>
                   <SelectTrigger className="w-48">
                     <SelectValue placeholder="Category" />
-                    <ChevronDown className="w-4 h-4" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All Categories">All Categories</SelectItem>
@@ -396,38 +389,12 @@ return (
                 <Select value={stockStatus} onValueChange={setStockStatus}>
                   <SelectTrigger className="w-48">
                     <SelectValue placeholder="Stock Status" />
-                    <ChevronDown className="w-4 h-4" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All Status">All Status</SelectItem>
                     <SelectItem value="in-stock">In Stock</SelectItem>
                     <SelectItem value="low-stock">Low Stock</SelectItem>
                     <SelectItem value="out-of-stock">Out of Stock</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center space-x-4">
-                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue placeholder="Month" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((month, idx) => (
-                      <SelectItem key={month} value={String(idx + 1).padStart(2, "0")}>{month}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Year Dropdown */}
-                <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger className="w-24">
-                    <SelectValue placeholder="Year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((year) => (
-                      <SelectItem key={year} value={String(year)}>{year}</SelectItem>
-                    ))}
                   </SelectContent>
                 </Select>
               </div>
