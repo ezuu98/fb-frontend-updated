@@ -175,17 +175,18 @@ export function InventoryDashboard() {
     setPage(1)
   }, [searchTerm, category, stockStatus, setPage])
 
-  // Set paginatedData: if searching, show all filteredData; else, slice for pagination
-  const paginatedData = searchTerm.trim()
-    ? filteredData // show all search results
-    : filteredData.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+  // Set paginatedData: always slice filteredData for pagination
+  const paginatedData = filteredData.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+
+  // Calculate actual total items for pagination (use filtered count when filters are active)
+  const actualTotalItems = filteredData.length
 
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {
     return {
-      totalProducts: totalItems
+      totalProducts: actualTotalItems
     }
-  }, [transformedInventory, totalItems])
+  }, [actualTotalItems])
 
   if (currentView === "sku-detail" && selectedSku) {
     return <SkuDetailView sku={selectedSku} onBack={handleBackToDashboard} />
@@ -474,7 +475,7 @@ return (
           </Table>
           <div className="flex justify-between items-center py-4 px-6">
             <div className="text-sm text-gray-600">
-              Showing {(page - 1) * itemsPerPage + 1} to {Math.min(page * itemsPerPage, totalItems)} of {totalItems} entries
+              Showing {(page - 1) * itemsPerPage + 1} to {Math.min(page * itemsPerPage, actualTotalItems)} of {actualTotalItems} entries
             </div>
             <div className="flex space-x-2">
               <Button
@@ -486,12 +487,12 @@ return (
                 Previous
               </Button>
               <span className="flex items-center px-3 py-1 text-sm text-gray-600">
-                Page {page} of {Math.ceil(totalItems / itemsPerPage)}
+                Page {page} of {Math.ceil(actualTotalItems / itemsPerPage)}
               </span>
               <Button
                 variant="outline"
                 size="sm"
-                disabled={page >= Math.ceil(totalItems / itemsPerPage)}
+                disabled={page >= Math.ceil(actualTotalItems / itemsPerPage)}
                 onClick={handleNextPage}
               >
                 Next
