@@ -181,12 +181,25 @@ export function InventoryDashboard() {
   // Calculate actual total items for pagination (use filtered count when filters are active)
   const actualTotalItems = filteredData.length
 
-  // Calculate dashboard stats
+  // Calculate dashboard stats from filtered data
   const dashboardStats = useMemo(() => {
+    let lowStockCount = 0
+    let outOfStockCount = 0
+
+    filteredData.forEach(item => {
+      if (item.totalStock === 0) {
+        outOfStockCount++
+      } else if (item.isLowStock) {
+        lowStockCount++
+      }
+    })
+
     return {
-      totalProducts: actualTotalItems
+      totalProducts: actualTotalItems,
+      lowStockCount,
+      outOfStockCount
     }
-  }, [actualTotalItems])
+  }, [filteredData, actualTotalItems])
 
   if (currentView === "sku-detail" && selectedSku) {
     return <SkuDetailView sku={selectedSku} onBack={handleBackToDashboard} />
@@ -321,7 +334,7 @@ return (
               <AlertTriangle className="h-4 w-4 text-orange-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{lowStockCount}</div>
+              <div className="text-2xl font-bold text-orange-600">{dashboardStats.lowStockCount}</div>
             </CardContent>
           </Card>
           <Card>
@@ -330,7 +343,7 @@ return (
               <AlertTriangle className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{outOfStockCount}</div>
+              <div className="text-2xl font-bold text-red-600">{dashboardStats.outOfStockCount}</div>
             </CardContent>
           </Card>
         </div>
