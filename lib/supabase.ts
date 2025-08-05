@@ -76,7 +76,7 @@ export interface StockMovements {
   id: string
   inventory_id: string
   warehouse_id: string
-  movement_type: "purchase" | "sale" | "transfer_in" | "transfer_out" | "adjustment" | "wastage" | "return"
+  movement_type: "purchase" | "sales" | "purchase_return" | "sales_returns" | "consumption" | "transfer_in" | "transfer_out" | "manufacturing" | "wastages"
   quantity: number
   unit_cost?: number
   reference_number?: string
@@ -159,7 +159,7 @@ export interface DashboardStats {
 export interface ProductDetails {
   product_id: number
   quantity: number
-  movement_type: "purchase" | "sale" | "transfer_in" | "transfer_out" | "manufacturing" | "wastage" | "purchase_return"
+  movement_type: "purchase" | "sales" | "purchase_return" | "sales_returns" | "consumption" | "transfer_in" | "transfer_out" | "manufacturing" | "wastages"
   warehouse_id: number
   warehouse_dest_id: number
   warehouses: {
@@ -181,7 +181,7 @@ export interface StockMovementDetailsResponse {
 
 export interface StockMovementData {
   quantity: number
-  movement_type: "purchase" | "sale" | "transfer_in" | "transfer_out" | "manufacturing" | "wastage" | "purchase_return"
+  movement_type: "purchase" | "sales" | "purchase_return" | "sales_returns" | "consumption" | "transfer_in" | "transfer_out" | "manufacturing" | "wastages"
   warehouse_id: number
   warehouse_dest_id: number | null
   warehouse_source: {

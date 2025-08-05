@@ -46,14 +46,13 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     const warehouses = new Map();
     
     // Add warehouses from inventory data
-    sku.warehouses?.forEach((wh) => {
+    sku.warehouse_inventory?.forEach((wh) => {
       const code = wh.warehouse?.code || "";
       const name = wh.warehouse?.name || wh.warehouse?.code || "Unknown";
       warehouses.set(code, {
         warehouse: name,
         warehouseCode: code,
         openingStock: wh.quantity || 0,
-        calculatedStock: wh.calculated_stock || 0,
         lastUpdated: "N/A",
       });
     });
@@ -85,7 +84,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     });
     
     return Array.from(warehouses.values());
-  }, [sku.warehouses, stockMovementData]);
+  }, [sku.warehouse_inventory, stockMovementData]);
 
   // Enhanced function to get stock movement data for a warehouse
   const getWarehouseMovements = (warehouseCode: string) => {
@@ -95,8 +94,10 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       const destWarehouse = movement.warehouse_dest?.code;
       
       if (sourceWarehouse === warehouseCode) {
-        // This warehouse is the source
         switch (movement.movement_type) {
+          case 'purchase':
+            acc.sales += Math.abs(movement.quantity);
+            break;
           case 'sales':
             acc.sales += Math.abs(movement.quantity);
             break;
@@ -106,11 +107,14 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
           case 'purchase_return':
             acc.purchase_returns += Math.abs(movement.quantity);
             break;
-          case 'transfer_out':
-            acc.transfer_out += Math.abs(movement.quantity);
+          case 'transfer_in':
+            acc.transfer_in += Math.abs(movement.quantity);
             break;
           case 'wastages':
             acc.wastages += Math.abs(movement.quantity);
+            break;
+          case 'consumption':
+            acc.consumption += Math.abs(movement.quantity);
             break;
         }
       }
@@ -122,7 +126,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             acc.purchases += movement.quantity;
             break;
           case 'transfer_in':
-            acc.transfer_in += movement.quantity;
+            acc.transfer_out += movement.quantity;
             break;
           case 'manufacturing':
             acc.manufacturing += movement.quantity;
@@ -140,7 +144,8 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       wastages: 0,
       transfer_in: 0,
       transfer_out: 0,
-      manufacturing: 0
+      manufacturing: 0,
+      consumption: 0
     });
     
     return warehouseMovements;
