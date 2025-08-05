@@ -12,6 +12,8 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
   const [lowStockCount, setLowStockCount] = useState(0)
   const [outOfStockCount, setOutOfStockCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
+  const [category, setCategory] = useState("All Categories")
+  const [stockStatus, setStockStatus] = useState("All Status")
   const [isSearching, setIsSearching] = useState(false)
   const [page, setPage] = useState(initialPage)
 
@@ -20,25 +22,21 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
       setLoading(true)
       setError(null)
       setDataLoaded(false)
-      console.log('Starting inventory fetch...')
 
       if (searchQuery) {
         // Search inventory using API
         const { data, total } = await apiClient.searchInventory(searchQuery, page, itemsPerPage)
-        console.log('Search inventory result:', { dataLength: data?.length, total })
         setInventory(data || [])
         setTotalItems(total || 0)
       } else {
         // Get all inventory using API
         const { data, total } = await apiClient.getInventory()
-        console.log('Get inventory result:', { dataLength: data?.length, total })
         setInventory(data || [])
         setTotalItems(total || 0)
       }
       
       // Mark data as loaded after successful fetch
       setDataLoaded(true)
-      console.log('Inventory fetch completed successfully')
     } catch (err: any) {
       setError(err.message || "Failed to fetch inventory")
       console.error("Error fetching inventory:", err)
@@ -48,7 +46,6 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
       setDataLoaded(false)
     } finally {
       setLoading(false)
-      console.log('Loading state set to false')
     }
   }
 
@@ -84,6 +81,18 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
     setPage(1)
   }
 
+  const setCategoryFilter = (newCategory: string) => {
+    setCategory(newCategory)
+    setPage(1) // Reset to first page when filtering
+    setLoading(true) // Show loading state during filter change
+  }
+
+  const setStockStatusFilter = (newStatus: string) => {
+    setStockStatus(newStatus)
+    setPage(1) // Reset to first page when filtering
+    setLoading(true) // Show loading state during filter change
+  }
+
   return {
     inventory,
     totalItems,
@@ -98,6 +107,10 @@ export function useInventory(initialPage = 1, itemsPerPage = 30) {
     searchInventory,
     clearSearch,
     searchQuery,
+    category,
+    stockStatus,
+    setCategoryFilter,
+    setStockStatusFilter,
     isSearching,
   }
 }

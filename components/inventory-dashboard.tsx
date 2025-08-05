@@ -66,9 +66,10 @@ export function InventoryDashboard() {
 
   const debouncedSearch = useMemo(
     () => debounce((query: string) => {
+      setSearchTerm(query);
       setPage(1);
       searchInventory(query);
-    }, 800),
+    }, 200), // Further reduced debounce time for better responsiveness
     [searchInventory, setPage]
   );
 
@@ -103,20 +104,9 @@ export function InventoryDashboard() {
 
   // Transform Supabase data for display
   const transformedInventory = useMemo(() => {  
-    console.log('Raw inventory data:', inventory);
-    console.log('Inventory length:', inventory?.length);
-    
     if (!inventory || !Array.isArray(inventory)) {
-      console.log('No inventory data available');
       return [];
     }
-    
-    // Debug: Log items with warehouse data
-    inventory.forEach((item, index) => {
-      if (item.warehouse_inventory && item.warehouse_inventory.length > 0) {
-        console.log(`Item ${index} has warehouse data:`, item.name, item.warehouse_inventory.length, 'warehouses');
-      }
-    });
     
     return inventory.map((item) => {
       const warehouseMap: Record<string, number> = {
@@ -141,11 +131,6 @@ export function InventoryDashboard() {
 
       const totalStock = Object.values(warehouseMap).reduce((sum, qty) => sum + qty, 0);
       const isLowStock = totalStock <= item.reordering_min_qty;
-
-      // Debug: Log transformation for items with warehouse data
-      if (item.warehouse_inventory && item.warehouse_inventory.length > 0) {
-        console.log(`Transformed item:`, item.name, 'Total stock:', totalStock, 'Warehouse map:', warehouseMap);
-      }
 
       return {
         id: item.id,
@@ -172,12 +157,8 @@ export function InventoryDashboard() {
     return Array.from(categories).sort()
   }, [transformedInventory])
 
+  // Client-side filtering (temporary until server-side filtering is fixed)
   const filteredData = useMemo(() => {
-    console.log('Transformed inventory length:', transformedInventory.length);
-    console.log('Search term:', searchTerm);
-    console.log('Category filter:', category);
-    console.log('Stock status filter:', stockStatus);
-    
     const filtered = transformedInventory.filter((item) => {
       const matchesSearch =
         item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -191,15 +172,9 @@ export function InventoryDashboard() {
         (stockStatus === "low-stock" && item.isLowStock && item.totalStock > 0) ||
         (stockStatus === "out-of-stock" && item.totalStock === 0)
 
-      // Debug: Log items that have warehouse data but might be filtered out
-      if (item.totalStock > 0) {
-        console.log(`Item with stock:`, item.product, 'Total stock:', item.totalStock, 'Matches search:', matchesSearch, 'Matches category:', matchesCategory, 'Matches stock status:', matchesStockStatus);
-      }
-
       return matchesSearch && matchesCategory && matchesStockStatus
     })
     
-    console.log(`Filtered data length:`, filtered.length, 'out of', transformedInventory.length);
     return filtered;
   }, [transformedInventory, searchTerm, category, stockStatus])
 
@@ -482,7 +457,7 @@ return (
 
                 {/* Export Button */}
                 <ExportInventory
-                  filteredData={filteredData}
+                  filteredData={paginatedData}
                   searchTerm={searchTerm}
                   category={category}
                   stockStatus={stockStatus}
@@ -595,7 +570,7 @@ return (
           </Table>
           <div className="flex justify-between items-center py-4 px-6">
             <div className="text-sm text-gray-600">
-              Showing {(page - 1) * itemsPerPage + 1} to {Math.min(page * itemsPerPage, actualTotalItems)} of {actualTotalItems} entries
+                              Showing {(page - 1) * itemsPerPage + 1} to {Math.min(page * itemsPerPage, actualTotalItems)} of {actualTotalItems} entries
             </div>
             <div className="flex space-x-2">
               <Button
@@ -612,7 +587,7 @@ return (
               <Button
                 variant="outline"
                 size="sm"
-                disabled={page >= Math.ceil(actualTotalItems / itemsPerPage)}
+                                  disabled={page >= Math.ceil(actualTotalItems / itemsPerPage)}
                 onClick={handleNextPage}
               >
                 Next

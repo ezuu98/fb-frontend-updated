@@ -88,7 +88,6 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
-    console.log('API Request URL:', url); // Debug log
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -104,11 +103,7 @@ class ApiClient {
         headers,
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
       const data = await response.json();
-      console.log('Parsed response data:', data);
 
       if (!response.ok) {
         throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
@@ -171,23 +166,26 @@ class ApiClient {
   // Inventory methods
   async getInventory(): Promise<{ data: InventoryItem[]; total: number }> {
     const response = await this.request<{ data: InventoryItem[]; total: number }>('/inventory');
-    console.log('API Response for inventory:', response);
-    console.log('Response success:', response.success);
-    console.log('Response data:', response.data);
-    console.log('Response data type:', typeof response.data);
-    console.log('Response data length:', response.data?.length);
-    console.log('Response.data:', response.data);
-    console.log('Response.total:', response.total);
     
     if (response.success && response.data) {
       // The response structure is { success: true, data: Array, total: number }
       // But we need to return { data: Array, total: number }
-      const result = {
+      return {
         data: response.data || [],
         total: response.total || 0
       };
-      console.log('Extracted result:', result);
-      return result;
+    }
+    throw new Error(response.error || 'Failed to fetch inventory');
+  }
+
+  async getInventoryWithFilters(queryParams: string): Promise<{ data: InventoryItem[]; total: number }> {
+    const response = await this.request<{ data: InventoryItem[]; total: number }>(`/inventory?${queryParams}`);
+    
+    if (response.success && response.data) {
+      return {
+        data: response.data || [],
+        total: response.total || 0
+      };
     }
     throw new Error(response.error || 'Failed to fetch inventory');
   }

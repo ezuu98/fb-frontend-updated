@@ -43,13 +43,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
 
   const warehouseData = useMemo(() => {
-    console.log('useMemo triggered - recalculating warehouse data');
-    console.log('stockMovementData length:', stockMovementData?.length);
-    
     const warehouses = new Map();
-    
-    console.log('Processing warehouses from inventory data:', sku.warehouses);
-    console.log('Processing warehouses from stock movements:', stockMovementData);
     
     // Add warehouses from inventory data
     sku.warehouses?.forEach((wh) => {
@@ -69,8 +63,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       const sourceWarehouse = movement.warehouse?.code;
       const destWarehouse = movement.warehouse_dest?.code;
       
-      console.log('Processing movement:', movement.movement_type, 'Source:', sourceWarehouse, 'Dest:', destWarehouse);
-      
       if (sourceWarehouse && !warehouses.has(sourceWarehouse)) {
         warehouses.set(sourceWarehouse, {
           warehouse: movement.warehouse?.name || sourceWarehouse,
@@ -79,7 +71,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
           calculatedStock: 0,
           lastUpdated: "N/A",
         });
-        console.log('Added source warehouse:', sourceWarehouse);
       }
       
       if (destWarehouse && !warehouses.has(destWarehouse)) {
@@ -90,18 +81,11 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
           calculatedStock: 0,
           lastUpdated: "N/A",
         });
-        console.log('Added dest warehouse:', destWarehouse);
       }
     });
     
-    const result = Array.from(warehouses.values());
-    console.log('Final warehouse data:', result);
-    return result;
+    return Array.from(warehouses.values());
   }, [sku.warehouses, stockMovementData]);
-  
-  // Debug logging
-  console.log('Warehouse data for rendering:', warehouseData);
-  console.log('Stock movement data available:', stockMovementData);
 
   // Enhanced function to get stock movement data for a warehouse
   const getWarehouseMovements = (warehouseCode: string) => {
@@ -221,7 +205,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
   useEffect(() => {
     const fetchStockMovementData = async () => {
-      console.log('Fetching stock movement data for:', sku.odoo_id || sku.id, 'Month:', selectedMonth, 'Year:', selectedYear);
       setStockMovementLoading(true);
       setStockMovementError(null);
       try {
@@ -230,9 +213,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
           parseInt(selectedMonth),
           selectedYear
         );
-        console.log('Stock movement API response:', response);
         setStockMovementData(response.data);
-        console.log('Set stock movement data:', response.data);
       } catch (err: any) {
         setStockMovementError(err.message || "Failed to fetch stock movement data");
         console.error("Stock movement data error:", err);
