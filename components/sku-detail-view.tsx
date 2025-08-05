@@ -162,7 +162,9 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     let totalTransferIN = 0;
     let totalTransferOUT = 0;
     let totalManufacturing = 0;
+    let totalConsumption = 0;
     let totalClosingStock = 0;
+
 
     warehouseData.forEach((row) => {
       const movements = getWarehouseMovements(row.warehouseCode);
@@ -176,6 +178,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       totalTransferIN += movements.transfer_in;
       totalTransferOUT += Math.abs(movements.transfer_out);
       totalManufacturing += movements.manufacturing;
+      totalConsumption += movements.consumption;
 
       // Calculate closing stock: 
       // opening + purchases + transfer_in + manufacturing - sales - purchase_returns - transfer_out - wastages
@@ -187,7 +190,8 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         - Math.abs(movements.sales)
         - Math.abs(movements.purchase_returns)
         - Math.abs(movements.transfer_out)
-        - Math.abs(movements.wastages);
+        - Math.abs(movements.wastages)
+        - Math.abs(movements.consumption);
 
       totalClosingStock += Math.max(0, closingStock); // Ensure no negative stock
     });
@@ -202,6 +206,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       totalTransferIN,
       totalTransferOUT,
       totalManufacturing,
+      totalConsumption,
       totalClosingStock,
     };
   };
@@ -394,6 +399,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer IN</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer OUT</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Manufacturing</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Consumption</TableHead>
                     <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Closing Stock</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -413,6 +419,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                           - Math.abs(movements.purchase_returns)
                           - Math.abs(movements.transfer_out)
                           - Math.abs(movements.wastages)
+                          - Math.abs(movements.consumption)
                         );
 
                         return (
@@ -434,6 +441,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                             <TableCell className="text-center text-green-500">{movements.transfer_in}</TableCell>
                             <TableCell className="text-center text-red-500">{movements.transfer_out}</TableCell>
                             <TableCell className="text-center text-blue-500">{movements.manufacturing}</TableCell>
+                            <TableCell className="text-center text-blue-500">{movements.consumption}</TableCell>
                             <TableCell className="text-center font-medium text-blue-600">{closingStock}</TableCell>
                           </TableRow>
                         );
@@ -450,6 +458,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                         <TableCell className="text-center font-bold text-green-500">{totals.totalTransferIN}</TableCell>
                         <TableCell className="text-center font-bold text-red-500">{totals.totalTransferOUT}</TableCell>
                         <TableCell className="text-center font-bold text-blue-500">{totals.totalManufacturing}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-500">{totals.totalConsumption}</TableCell>
                         <TableCell className="text-center font-bold text-blue-600">{totals.totalClosingStock}</TableCell>
                       </TableRow>
                     </>
