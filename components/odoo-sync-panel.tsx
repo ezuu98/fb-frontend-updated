@@ -3,13 +3,7 @@
 import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Download, PlugZap } from "lucide-react"
-import axios from "axios"
-
-// Create an axios instance with base configuration
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: { "Content-Type": "application/json" },
-})
+import { apiClient } from "@/lib/api-client"
 
 export function OdooSyncPanel() {
   const [isSyncing, setIsSyncing] = useState(false)
@@ -19,12 +13,12 @@ export function OdooSyncPanel() {
   const handleTestConnection = async () => {
     setIsTesting(true)
     try {
-      const response = await api.post("/odoo/status")
-      console.log("Connection successful:")
+      // For now, we'll test by trying to sync products
+      await apiClient.syncProducts()
       setMessage("✅ Connection successful")
-    } catch (err) {
+    } catch (err: any) {
       console.error("Connection test failed:", err)
-      setMessage("❌ Connection failed")
+      setMessage("❌ Connection failed: " + err.message)
     } finally {
       setIsTesting(false)
     }
@@ -33,10 +27,11 @@ export function OdooSyncPanel() {
   const handleSync = async () => {
     setIsSyncing(true)
     try {
-      const response = await api.post("/odoo/sync")
-      console.log("Sync response:", response.data)
-    } catch (err) {
+      const result = await apiClient.syncAll()
+      setMessage(`✅ Sync completed! ${result.count} records processed`)
+    } catch (err: any) {
       console.error("Sync failed:", err)
+      setMessage("❌ Sync failed: " + err.message)
     } finally {
       setIsSyncing(false)
     }

@@ -216,11 +216,11 @@ class ApiClient {
   }
 
   async getStockMovementDetails(productId: string, month: number, year: number): Promise<{ data: StockMovement[] }> {
-    const response = await this.request<StockMovement[]>(
+    const response = await this.request<{ data: StockMovement[] }>(
       `/inventory/stock-movements/${productId}?month=${month}&year=${year}`
     );
     if (response.success && response.data) {
-      return { data: response.data };
+      return response.data;
     }
     throw new Error(response.error || 'Failed to get stock movement details');
   }

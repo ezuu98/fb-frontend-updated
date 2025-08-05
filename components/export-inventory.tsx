@@ -79,6 +79,12 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
         const totalReserved = Object.values(warehouseData).reduce((sum: number, wh: any) => sum + (wh.reserved || 0), 0)
         const unitCost = item.originalData?.unit_cost || 0
         const stockValue = totalStock * unitCost
+        
+        // Calculate total stock value across all warehouses
+        const totalStockValue = Object.values(warehouseData).reduce(
+          (sum: number, wh: any) => sum + ((wh.current || 0) * unitCost),
+          0,
+        )
 
         const stockStatus = totalStock === 0 ? "Out of Stock" : item.isLowStock ? "Low Stock" : "In Stock"
 
@@ -111,7 +117,7 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
     return csvContent
   }
 
-  const generateDetailedCSV = (data: any[]) => {
+  const generateDetailedCSV = async (data: any[]) => {
     const headers = [
       "Barcode",
       "Product Name",
@@ -123,11 +129,11 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
       "Purchases",
       "Purchase Returns",
       "Sales",
+      "Sales Returns",
       "Wastages",
       "Transfer In",
       "Transfer Out",
-      "Manufacturing In",
-      "Manufacturing Out",
+      "Manufacturing",
       "Current Stock",
       "Reserved Stock",
       "Available Stock",
@@ -138,7 +144,7 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
 
     const rows: string[] = []
 
-    data.forEach((item) => {
+    for (const item of data) {
       const baseInfo = {
         barcode: item.barcode || "",
         product: item.product || item.originalData?.product_name || "",
@@ -148,7 +154,42 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
       }
 
       if (item.originalData?.warehouse_inventory?.length) {
-        item.originalData.warehouse_inventory.forEach((wh: any) => {
+        for (const wh of item.originalData.warehouse_inventory) {
+          // Get stock movement data for this product and warehouse
+          let stockMovements = {
+            purchases: 0,
+            purchase_returns: 0,
+            sales: 0,
+            sales_returns: 0,
+            wastages: 0,
+            transfer_in: 0,
+            transfer_out: 0,
+            manufacturing: 0
+          }
+
+          try {
+            // Fetch stock movement data for this product
+            const { StockMovementService } = await import("@/lib/api/inventory")
+            const currentDate = new Date()
+            const currentMonth = currentDate.getMonth() + 1
+            const currentYear = currentDate.getFullYear()
+            
+            const response = await StockMovementService.getStockMovementDetails(
+              item.originalData?.odoo_id?.toString() || item.originalData?.id?.toString() || "",
+              currentMonth,
+              currentYear
+            )
+            
+            // Find movements for this specific warehouse
+            const warehouseCode = wh.warehouse?.code
+            const warehouseMovement = response.data.find((m: any) => m.warehouse_code === warehouseCode)
+            if (warehouseMovement) {
+              stockMovements = warehouseMovement
+            }
+          } catch (error) {
+            console.error("Error fetching stock movements for export:", error)
+          }
+
           const stockValue = (wh.current_stock || 0) * baseInfo.unitCost
           rows.push(
             [
@@ -159,14 +200,14 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
               `"${wh.warehouse?.name || ""}"`,
               `"${wh.warehouse?.code || ""}"`,
               wh.opening_stock || 0,
-              0, // Purchases - would need stock movements data
-              0, // Purchase Returns
-              0, // Sales
-              0, // Wastages
-              0, // Transfer In
-              0, // Transfer Out
-              0, // Manufacturing In
-              0, // Manufacturing Out
+              stockMovements.purchases || 0,
+              stockMovements.purchase_returns || 0,
+              Math.abs(stockMovements.sales) || 0,
+              stockMovements.sales_returns || 0,
+              Math.abs(stockMovements.wastages) || 0,
+              stockMovements.transfer_in || 0,
+              Math.abs(stockMovements.transfer_out) || 0,
+              stockMovements.manufacturing || 0,
               wh.current_stock || 0,
               wh.reserved_stock || 0,
               wh.available_stock || 0,
@@ -175,7 +216,7 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
               `"${new Date(wh.last_updated || "").toLocaleDateString()}"`,
             ].join(","),
           )
-        })
+        }
       } else {
         // Product with no warehouse data
         rows.push(
@@ -198,13 +239,14 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
             0,
             0,
             0,
+            0,
             baseInfo.unitCost.toFixed(2),
             "0.00",
             '""',
           ].join(","),
         )
       }
-    })
+    }
 
     return [headers.join(","), ...rows].join("\n")
   }
@@ -221,7 +263,96 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
     window.URL.revokeObjectURL(url)
   }
 
-  const handleExport = async (format: "csv" | "detailed-csv" | "json") => {
+  const generateStockMovementReport = async (data: any[]) => {
+    const headers = [
+      "Product Name",
+      "Barcode",
+      "Category",
+      "Warehouse",
+      "Warehouse Code",
+      "Month",
+      "Year",
+      "Opening Stock",
+      "Purchases",
+      "Purchase Returns",
+      "Sales",
+      "Sales Returns",
+      "Wastages",
+      "Transfer In",
+      "Transfer Out",
+      "Manufacturing",
+      "Closing Stock",
+      "Unit Cost",
+      "Stock Value",
+    ]
+
+    const rows: string[] = []
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth() + 1
+    const currentYear = currentDate.getFullYear()
+
+    for (const item of data) {
+      try {
+        const { StockMovementService } = await import("@/lib/api/inventory")
+        const response = await StockMovementService.getStockMovementDetails(
+          item.originalData?.odoo_id?.toString() || item.originalData?.id?.toString() || "",
+          currentMonth,
+          currentYear
+        )
+
+        if (item.originalData?.warehouse_inventory?.length) {
+          for (const wh of item.originalData.warehouse_inventory) {
+            const warehouseCode = wh.warehouse?.code
+            const warehouseMovement = response.data.find((m: any) => m.warehouse_code === warehouseCode) || {
+              purchases: 0,
+              purchase_returns: 0,
+              sales: 0,
+              sales_returns: 0,
+              wastages: 0,
+              transfer_in: 0,
+              transfer_out: 0,
+              manufacturing: 0
+            }
+
+            const openingStock = wh.opening_stock || 0
+            const closingStock = wh.current_stock || 0
+            const unitCost = item.originalData?.unit_cost || 0
+            const stockValue = closingStock * unitCost
+
+            rows.push(
+              [
+                `"${item.product || item.originalData?.product_name || ""}"`,
+                `"${item.barcode || ""}"`,
+                `"${item.category || item.originalData?.category?.name || ""}"`,
+                `"${wh.warehouse?.name || ""}"`,
+                `"${wh.warehouse?.code || ""}"`,
+                currentMonth,
+                currentYear,
+                openingStock,
+                warehouseMovement.purchases || 0,
+                warehouseMovement.purchase_returns || 0,
+                Math.abs(warehouseMovement.sales) || 0,
+                warehouseMovement.sales_returns || 0,
+                Math.abs(warehouseMovement.wastages) || 0,
+                warehouseMovement.transfer_in || 0,
+                Math.abs(warehouseMovement.transfer_out) || 0,
+                warehouseMovement.manufacturing || 0,
+                closingStock,
+                unitCost.toFixed(2),
+                stockValue.toFixed(2),
+              ].join(","),
+            )
+          }
+        }
+      } catch (error) {
+        console.error("Error generating stock movement report:", error)
+      }
+    }
+
+    return [headers.join(","), ...rows].join("\n")
+  }
+
+  const handleExport = async (format: "csv" | "detailed-csv" | "json" | "stock-movement") => {
     setLoading(true)
     setError(null)
 
@@ -237,7 +368,7 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
           break
 
         case "detailed-csv":
-          const detailedCsvContent = generateDetailedCSV(dataToExport)
+          const detailedCsvContent = await generateDetailedCSV(dataToExport)
           downloadFile(detailedCsvContent, `inventory_detailed_${timestamp}${filterSuffix}.csv`, "text/csv")
           break
 
@@ -262,6 +393,11 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
             2,
           )
           downloadFile(jsonContent, `inventory_${timestamp}${filterSuffix}.json`, "application/json")
+          break
+
+        case "stock-movement":
+          const stockMovementContent = await generateStockMovementReport(dataToExport)
+          downloadFile(stockMovementContent, `stock_movement_report_${timestamp}${filterSuffix}.csv`, "text/csv")
           break
       }
     } catch (err) {
@@ -323,6 +459,14 @@ export function ExportInventory({ filteredData, searchTerm, category, stockStatu
             <div>
               <div className="font-medium">JSON Export</div>
               <div className="text-xs text-gray-500">Complete data structure</div>
+            </div>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onClick={() => handleExport("stock-movement")} disabled={loading}>
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            <div>
+              <div className="font-medium">Stock Movement Report</div>
+              <div className="text-xs text-gray-500">Monthly movement analysis</div>
             </div>
           </DropdownMenuItem>
 

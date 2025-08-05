@@ -23,51 +23,35 @@ export function LoginPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [isSignUp, setIsSignUp] = useState(false)
 
-  const { signIn, signUp } = useAuth()
+  const { login, register, error: authError, clearError } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
     setSuccess(null)
+    clearError()
 
     try {
       if (isSignUp) {
-    if (!fullName.trim()) {
-      setError("Full name is required");
-      return;
-    }
+        if (!fullName.trim()) {
+          setError("Full name is required");
+          return;
+        }
 
-    const { data, error } = await signUp(email, password, fullName);
-
-    if (error) {
-      setError(error.message);
-    } else if (data?.user && !data.user.email_confirmed_at) {
-      setSuccess("Account created! Check your email for the confirmation link.");
-    } else if (data?.user) {
-      setSuccess("Account created successfully!");
-    } else {
-      setError("Unexpected response. Please try again.");
-    }
-
-  } else {
-    const { error } = await signIn(email, password);
-
-    if (error) {
-      if (error.message.includes("Invalid login credentials")) {
-        setError("Invalid email or password. Please check your credentials.");
-      } else if (error.message.includes("Email not confirmed")) {
-        setError("Please check your email and click the confirmation link before signing in.");
+        await register(email, password, fullName);
+        setSuccess("Account created! Please check your email for verification.");
       } else {
-        setError(error.message);
+        await login(email, password);
+        setSuccess("Signed in successfully!");
+        // Force a page refresh to ensure the auth state updates
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       }
-    } else {
-      setSuccess("Signed in successfully!");
-    }
-  }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Auth error:", err)
-      setError("An unexpected error occurred. Please try again.")
+      setError(err.message || "An unexpected error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }

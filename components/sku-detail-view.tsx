@@ -3,12 +3,12 @@
 import { ArrowLeft, User } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import type { InventoryWithDetails } from "@/lib/supabase"
-import { useEffect, useState } from "react"
-import { StockMovementService, type StockMovementDetailsResponse } from "@/lib/api/inventory"
+import type { InventoryItem } from "@/lib/api-client"
+import { useEffect, useState, useMemo } from "react"
+import { apiClient, type StockMovement } from "@/lib/api-client"
 
 interface SkuDetailViewProps {
-  sku: InventoryWithDetails
+  sku: InventoryItem
   onBack: () => void
 }
 
@@ -36,24 +36,118 @@ const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
 export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-  const [stockMovementData, setStockMovementData] = useState<StockMovementDetailsResponse[]>([]);
+  const [stockMovementData, setStockMovementData] = useState<StockMovement[]>([]);
   const [stockMovementLoading, setStockMovementLoading] = useState(false);
   const [stockMovementError, setStockMovementError] = useState<string | null>(null);
 
-  const warehouseData = sku.warehouse_inventory?.map((wh) => {
-    const warehouseObj = Array.isArray(wh.warehouse) ? (wh.warehouse[0] as any) : (wh.warehouse as any);
-    return {
-      warehouse: warehouseObj?.name || warehouseObj?.code || "Unknown",
-      warehouseCode: warehouseObj?.code || "",
-      openingStock: wh.quantity || 0,
-      lastUpdated: (wh as any).last_updated ? new Date((wh as any).last_updated).toLocaleDateString() : "N/A",
-    }
-  }) || [];
+
+
+  const warehouseData = useMemo(() => {
+    console.log('useMemo triggered - recalculating warehouse data');
+    console.log('stockMovementData length:', stockMovementData?.length);
+    
+    const warehouses = new Map();
+    
+    console.log('Processing warehouses from inventory data:', sku.warehouses);
+    console.log('Processing warehouses from stock movements:', stockMovementData);
+    
+    // Add warehouses from inventory data
+    sku.warehouses?.forEach((wh) => {
+      const code = wh.warehouse?.code || "";
+      const name = wh.warehouse?.name || wh.warehouse?.code || "Unknown";
+      warehouses.set(code, {
+        warehouse: name,
+        warehouseCode: code,
+        openingStock: wh.quantity || 0,
+        calculatedStock: wh.calculated_stock || 0,
+        lastUpdated: "N/A",
+      });
+    });
+    
+    // Add warehouses from stock movements
+    stockMovementData?.forEach((movement) => {
+      const sourceWarehouse = movement.warehouse?.code;
+      const destWarehouse = movement.warehouse_dest?.code;
+      
+      console.log('Processing movement:', movement.movement_type, 'Source:', sourceWarehouse, 'Dest:', destWarehouse);
+      
+      if (sourceWarehouse && !warehouses.has(sourceWarehouse)) {
+        warehouses.set(sourceWarehouse, {
+          warehouse: movement.warehouse?.name || sourceWarehouse,
+          warehouseCode: sourceWarehouse,
+          openingStock: 0,
+          calculatedStock: 0,
+          lastUpdated: "N/A",
+        });
+        console.log('Added source warehouse:', sourceWarehouse);
+      }
+      
+      if (destWarehouse && !warehouses.has(destWarehouse)) {
+        warehouses.set(destWarehouse, {
+          warehouse: movement.warehouse_dest?.name || destWarehouse,
+          warehouseCode: destWarehouse,
+          openingStock: 0,
+          calculatedStock: 0,
+          lastUpdated: "N/A",
+        });
+        console.log('Added dest warehouse:', destWarehouse);
+      }
+    });
+    
+    const result = Array.from(warehouses.values());
+    console.log('Final warehouse data:', result);
+    return result;
+  }, [sku.warehouses, stockMovementData]);
+  
+  // Debug logging
+  console.log('Warehouse data for rendering:', warehouseData);
+  console.log('Stock movement data available:', stockMovementData);
 
   // Enhanced function to get stock movement data for a warehouse
   const getWarehouseMovements = (warehouseCode: string) => {
-    const movement = stockMovementData.find((m) => m.warehouse_code === warehouseCode);
-    return movement || {
+    // Process stock movement data to aggregate by warehouse
+    const warehouseMovements = stockMovementData.reduce((acc, movement) => {
+      const sourceWarehouse = movement.warehouse?.code;
+      const destWarehouse = movement.warehouse_dest?.code;
+      
+      if (sourceWarehouse === warehouseCode) {
+        // This warehouse is the source
+        switch (movement.movement_type) {
+          case 'sales':
+            acc.sales += Math.abs(movement.quantity);
+            break;
+          case 'sales_returns':
+            acc.sales_returns += Math.abs(movement.quantity);
+            break;
+          case 'purchase_return':
+            acc.purchase_returns += Math.abs(movement.quantity);
+            break;
+          case 'transfer_out':
+            acc.transfer_out += Math.abs(movement.quantity);
+            break;
+          case 'wastages':
+            acc.wastages += Math.abs(movement.quantity);
+            break;
+        }
+      }
+      
+      if (destWarehouse === warehouseCode) {
+        // This warehouse is the destination
+        switch (movement.movement_type) {
+          case 'purchase':
+            acc.purchases += movement.quantity;
+            break;
+          case 'transfer_in':
+            acc.transfer_in += movement.quantity;
+            break;
+          case 'manufacturing':
+            acc.manufacturing += movement.quantity;
+            break;
+        }
+      }
+      
+      return acc;
+    }, {
       warehouse_code: warehouseCode,
       purchases: 0,
       purchase_returns: 0,
@@ -63,7 +157,9 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       transfer_in: 0,
       transfer_out: 0,
       manufacturing: 0
-    };
+    });
+    
+    return warehouseMovements;
   };
 
   // Calculate totals including all movement types
@@ -125,15 +221,18 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
   useEffect(() => {
     const fetchStockMovementData = async () => {
+      console.log('Fetching stock movement data for:', sku.odoo_id || sku.id, 'Month:', selectedMonth, 'Year:', selectedYear);
       setStockMovementLoading(true);
       setStockMovementError(null);
       try {
-        const response = await StockMovementService.getStockMovementDetails(
+        const response = await apiClient.getStockMovementDetails(
           sku.odoo_id?.toString() || sku.id?.toString() || "",
           parseInt(selectedMonth),
           selectedYear
         );
+        console.log('Stock movement API response:', response);
         setStockMovementData(response.data);
+        console.log('Set stock movement data:', response.data);
       } catch (err: any) {
         setStockMovementError(err.message || "Failed to fetch stock movement data");
         console.error("Stock movement data error:", err);

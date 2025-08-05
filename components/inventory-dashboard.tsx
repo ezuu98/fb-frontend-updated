@@ -30,7 +30,7 @@ import {
 import { SkuDetailView } from "./sku-detail-view"
 import { useInventory } from "@/hooks/use-inventory"
 import { useAuth } from "@/hooks/use-auth"
-import type { InventoryWithDetails } from "@/lib/supabase"
+import type { InventoryItem } from "@/lib/api-client"
 import { AddProductModal } from "./add-product-modal"
 import { EditProductModal } from "./edit-product-modal"
 import { ExportInventory } from "./export-inventory"
@@ -42,7 +42,7 @@ export function InventoryDashboard() {
   const [category, setCategory] = useState("All Categories")
   const [stockStatus, setStockStatus] = useState("All Status")
   const [currentView, setCurrentView] = useState<"dashboard" | "sku-detail">("dashboard")
-  const [selectedSku, setSelectedSku] = useState<InventoryWithDetails | null>(null)
+  const [selectedSku, setSelectedSku] = useState<InventoryItem | null>(null)
   const [showOdooSync, setShowOdooSync] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   
@@ -52,6 +52,7 @@ export function InventoryDashboard() {
     inventory,
     totalItems,
     loading,
+    dataLoaded,
     error,
     lowStockCount,
     outOfStockCount,
@@ -61,7 +62,7 @@ export function InventoryDashboard() {
     page
   } = useInventory(1, itemsPerPage)
 
-  const { user, profile, signOut } = useAuth()
+  const { user, logout } = useAuth()
 
   const debouncedSearch = useMemo(
     () => debounce((query: string) => {
@@ -77,7 +78,7 @@ export function InventoryDashboard() {
     };
   }, [debouncedSearch]);
 
-  const handleSkuClick = (item: InventoryWithDetails) => {
+  const handleSkuClick = (item: InventoryItem) => {
     setSelectedSku(item)
     setCurrentView("sku-detail")
   }
@@ -88,7 +89,7 @@ export function InventoryDashboard() {
   }
 
   const handleLogout = async () => {
-    await signOut()
+    await logout()
   }
 
   // Handle pagination
@@ -102,6 +103,21 @@ export function InventoryDashboard() {
 
   // Transform Supabase data for display
   const transformedInventory = useMemo(() => {  
+    console.log('Raw inventory data:', inventory);
+    console.log('Inventory length:', inventory?.length);
+    
+    if (!inventory || !Array.isArray(inventory)) {
+      console.log('No inventory data available');
+      return [];
+    }
+    
+    // Debug: Log items with warehouse data
+    inventory.forEach((item, index) => {
+      if (item.warehouse_inventory && item.warehouse_inventory.length > 0) {
+        console.log(`Item ${index} has warehouse data:`, item.name, item.warehouse_inventory.length, 'warehouses');
+      }
+    });
+    
     return inventory.map((item) => {
       const warehouseMap: Record<string, number> = {
         bdrwh: 0,
@@ -115,11 +131,10 @@ export function InventoryDashboard() {
       const validWarehouseCodes = Object.keys(warehouseMap);
 
       item.warehouse_inventory?.forEach((wh) => {
-        const warehouseObj = Array.isArray(wh.warehouse) ? wh.warehouse[0] : wh.warehouse;
-        const whCode = warehouseObj?.code?.toLowerCase();
+        const whCode = wh.warehouse?.code?.toLowerCase();
         if (whCode && validWarehouseCodes.includes(whCode)) {
           // Use calculated stock quantity from movements if available, otherwise use static quantity
-          const stockQuantity = (wh as any).stock_quantity !== undefined ? (wh as any).stock_quantity : wh.quantity || 0;
+          const stockQuantity = wh.stock_quantity !== undefined ? wh.stock_quantity : wh.quantity || 0;
           warehouseMap[whCode] = stockQuantity;
         }
       });
@@ -127,11 +142,16 @@ export function InventoryDashboard() {
       const totalStock = Object.values(warehouseMap).reduce((sum, qty) => sum + qty, 0);
       const isLowStock = totalStock <= item.reordering_min_qty;
 
+      // Debug: Log transformation for items with warehouse data
+      if (item.warehouse_inventory && item.warehouse_inventory.length > 0) {
+        console.log(`Transformed item:`, item.name, 'Total stock:', totalStock, 'Warehouse map:', warehouseMap);
+      }
+
       return {
         id: item.id,
         barcode: item.barcode,
         product: item.name,
-        category: Array.isArray(item.category) ? (item.category[0] as any)?.display_name : (item.category as any)?.display_name,
+        category: item.category?.display_name || "Uncategorized",
         bdrwh: warehouseMap.bdrwh,
         mhowh: warehouseMap.mhowh,
         sbzwh: warehouseMap.sbzwh,
@@ -153,10 +173,15 @@ export function InventoryDashboard() {
   }, [transformedInventory])
 
   const filteredData = useMemo(() => {
-    return transformedInventory.filter((item) => {
+    console.log('Transformed inventory length:', transformedInventory.length);
+    console.log('Search term:', searchTerm);
+    console.log('Category filter:', category);
+    console.log('Stock status filter:', stockStatus);
+    
+    const filtered = transformedInventory.filter((item) => {
       const matchesSearch =
         item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.barcode.includes(searchTerm)
+        (item.barcode && item.barcode.includes(searchTerm))
 
       const matchesCategory = category === "All Categories" || item.category === category
 
@@ -166,8 +191,16 @@ export function InventoryDashboard() {
         (stockStatus === "low-stock" && item.isLowStock && item.totalStock > 0) ||
         (stockStatus === "out-of-stock" && item.totalStock === 0)
 
+      // Debug: Log items that have warehouse data but might be filtered out
+      if (item.totalStock > 0) {
+        console.log(`Item with stock:`, item.product, 'Total stock:', item.totalStock, 'Matches search:', matchesSearch, 'Matches category:', matchesCategory, 'Matches stock status:', matchesStockStatus);
+      }
+
       return matchesSearch && matchesCategory && matchesStockStatus
     })
+    
+    console.log(`Filtered data length:`, filtered.length, 'out of', transformedInventory.length);
+    return filtered;
   }, [transformedInventory, searchTerm, category, stockStatus])
 
   // Reset to page 1 when filters change
@@ -201,17 +234,71 @@ export function InventoryDashboard() {
     }
   }, [filteredData, actualTotalItems])
 
-  if (currentView === "sku-detail" && selectedSku) {
-    return <SkuDetailView sku={selectedSku} onBack={handleBackToDashboard} />
-  }
-
-  if (loading) {
+  if (loading || !dataLoaded) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading inventory...</p>
-        </div>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-8">
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 bg-gray-800 rounded"></div>
+                <span className="text-xl font-semibold text-gray-900">FreshBasket</span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage
+                        src="/placeholder.svg"
+                        alt={user?.email || "User"}
+                      />
+                      <AvatarFallback>
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <div className="flex items-center justify-start gap-2 p-2">
+                    <div className="flex flex-col space-y-1 leading-none">
+                      <p className="font-medium">{user?.email}</p>
+                      <p className="w-[200px] truncate text-sm text-muted-foreground">{user?.role || "User"}</p>
+                      <Badge variant="secondary" className="w-fit text-xs">
+                        {user?.role || "User"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="px-6 py-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-8">
+              <h1 className="text-3xl font-bold text-gray-900">Live Inventory Tracking</h1>
+            </div>
+
+            {/* Loading State */}
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-6"></div>
+                <p className="text-gray-600 text-lg mb-2">Loading inventory data...</p>
+                <p className="text-gray-500 text-sm">This may take a few moments for large datasets</p>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     )
   }
@@ -221,10 +308,14 @@ export function InventoryDashboard() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">Error loading inventory: {error}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
+          <Button onClick={() => refetch()}>Retry</Button>
         </div>
       </div>
     )
+  }
+
+  if (currentView === "sku-detail" && selectedSku) {
+    return <SkuDetailView sku={selectedSku} onBack={handleBackToDashboard} />
   }
 
 //   const fetchStockMovement = async () => {
@@ -261,8 +352,8 @@ return (
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
                   <AvatarImage
-                    src={profile?.avatar_url || "/placeholder.svg"}
-                    alt={profile?.full_name || user?.email}
+                    src="/placeholder.svg"
+                    alt={user?.email || "User"}
                   />
                   <AvatarFallback>
                     <User className="h-4 w-4" />
@@ -273,13 +364,11 @@ return (
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <div className="flex items-center justify-start gap-2 p-2">
                 <div className="flex flex-col space-y-1 leading-none">
-                  {profile?.full_name && <p className="font-medium">{profile.full_name}</p>}
-                  <p className="w-[200px] truncate text-sm text-muted-foreground">{user?.email}</p>
-                  {profile?.role && (
-                    <Badge variant="secondary" className="w-fit text-xs">
-                      {profile.role}
-                    </Badge>
-                  )}
+                  <p className="font-medium">{user?.email}</p>
+                  <p className="w-[200px] truncate text-sm text-muted-foreground">{user?.role || "User"}</p>
+                  <Badge variant="secondary" className="w-fit text-xs">
+                    {user?.role || "User"}
+                  </Badge>
                 </div>
               </div>
               <DropdownMenuSeparator />
@@ -325,7 +414,13 @@ return (
               <CardTitle className="text-sm font-medium">Total Products</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dashboardStats.totalProducts}</div>
+              <div className="text-2xl font-bold">
+                {loading ? (
+                  <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                ) : (
+                  totalItems
+                )}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -334,7 +429,13 @@ return (
               <AlertTriangle className="h-4 w-4 text-orange-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{dashboardStats.lowStockCount}</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {loading ? (
+                  <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                ) : (
+                  lowStockCount
+                )}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -343,7 +444,13 @@ return (
               <AlertTriangle className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{dashboardStats.outOfStockCount}</div>
+              <div className="text-2xl font-bold text-red-600">
+                {loading ? (
+                  <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                ) : (
+                  outOfStockCount
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
