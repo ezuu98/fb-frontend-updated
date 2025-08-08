@@ -108,7 +108,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             acc.purchase_returns += Math.abs(movement.quantity);
             break;
           case 'transfer_in':
-            acc.transfer_in += Math.abs(movement.quantity);
+            acc.transfer_out += Math.abs(movement.quantity);
             break;
           case 'wastages':
             acc.wastages += Math.abs(movement.quantity);
@@ -126,7 +126,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             acc.purchases += movement.quantity;
             break;
           case 'transfer_in':
-            acc.transfer_out += movement.quantity;
+            acc.transfer_in += movement.quantity;
             break;
           case 'manufacturing':
             acc.manufacturing += movement.quantity;
