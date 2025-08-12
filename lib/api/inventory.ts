@@ -45,7 +45,7 @@ export class InventoryAPI {
           .select(`
           product_id,
           quantity,
-          warehouse:warehouses(id, name, code)
+          warehouse:warehouses!warehouse_inventory_warehouse_id_fkey(id, name, code)
         `)
           .in("product_id", odooIds)
 
@@ -332,6 +332,48 @@ export class StockMovementService {
     } catch (error) {
       console.error("Error in getStockMovementDetails:", error)
       throw error
+    }
+  }
+
+  /**
+   * Get stock variance with totals for a specific product and date
+   */
+  static async getStockVarianceWithTotals(
+    productId: string,
+    date: string
+  ): Promise<{
+    success: boolean;
+    data: Array<{
+      warehouse_id: string;
+      warehouse_code: string;
+      warehouse_name: string;
+      calculated_closing_stock: number;
+      corrected_closing_stock: number;
+      stock_variance: number;
+      has_correction: boolean;
+      is_total: boolean;
+    }>;
+  }> {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-with-totals/${productId}?date=${date}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error("Error in getStockVarianceWithTotals:", error);
+      throw error;
     }
   }
 }

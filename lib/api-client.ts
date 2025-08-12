@@ -49,10 +49,12 @@ export interface StockMovement {
   quantity: number;
   created_at: string;
   warehouse?: {
+    id?: number;
     name: string;
     code: string;
   };
   warehouse_dest?: {
+    id?: number;
     name: string;
     code: string;
   };
@@ -223,6 +225,20 @@ class ApiClient {
     throw new Error(response.error || 'Failed to get stock movement details');
   }
 
+  async getStockMovementDetailsByDateRange(productId: string, startDate: string, endDate: string): Promise<{ success: boolean; data: StockMovement[]; opening_stocks?: Record<string, number> }> {
+    const response = await this.request<{ data: StockMovement[]; opening_stocks?: Record<string, number> }>(
+      `/inventory/stock-movements/${productId}?start_date=${startDate}&end_date=${endDate}`
+    );
+    if (response.success && response.data) {
+      return { 
+        success: true, 
+        data: response.data.data || [], 
+        opening_stocks: response.data.opening_stocks 
+      };
+    }
+    throw new Error(response.error || 'Failed to get stock movement details');
+  }
+
   // Sync methods
   async syncPurchases(): Promise<{ success: boolean; count: number }> {
     const response = await this.request<{ success: boolean; count: number }>('/sync/purchases', {
@@ -262,6 +278,18 @@ class ApiClient {
       return response.data;
     }
     throw new Error(response.error || 'Failed to sync all data');
+  }
+
+  // Stock Corrections methods
+  async uploadStockCorrections(corrections: any[]): Promise<{ success_count: number; error_count: number; errors: any[] }> {
+    const response = await this.request<{ success_count: number; error_count: number; errors: any[] }>('/stock-corrections/upload', {
+      method: 'POST',
+      body: JSON.stringify({ corrections }),
+    });
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to upload stock corrections');
   }
 
   // Utility methods

@@ -35,6 +35,7 @@ import { AddProductModal } from "./add-product-modal"
 import { EditProductModal } from "./edit-product-modal"
 import { ExportInventory } from "./export-inventory"
 import { OdooSyncPanel } from "./odoo-sync-panel"
+import { StockCorrectionsUpload } from "./stock-corrections-upload"
 import { useEffect } from "react"
 
 export function InventoryDashboard() {
@@ -454,6 +455,8 @@ return (
                 />
               </div>
               <div className="flex items-center gap-2 md:gap-4">
+                {/* Stock Corrections Upload */}
+                <StockCorrectionsUpload />
 
                 {/* Export Button */}
                 <ExportInventory
