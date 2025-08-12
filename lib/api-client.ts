@@ -170,8 +170,6 @@ class ApiClient {
     const response = await this.request<InventoryItem[]>('/inventory');
     
     if (response.success && response.data) {
-      // The response structure is { success: true, data: Array, total: number }
-      // But we need to return { data: Array, total: number }
       return {
         data: response.data || [],
         total: response.total || 0

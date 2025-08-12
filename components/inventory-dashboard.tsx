@@ -294,23 +294,6 @@ export function InventoryDashboard() {
     return <SkuDetailView sku={selectedSku} onBack={handleBackToDashboard} />
   }
 
-//   const fetchStockMovement = async () => {
-//     if (!selectedMonth || !selectedYear || !inventory.product_id) {
-//       console.warn("Missing data to fetch stock movement");
-//       return;
-//     } try {
-//       await stockMovementService({
-//         date: selectedDate.toISOString().split("T")[0], // Format: YYYY-MM-DD
-//         month: selectedMonth,
-//         year: selectedYear,
-//         odoo_id: odooId,
-//       });
-//     } catch (error) {
-//       console.error("Failed to fetch stock movement:", error);
-//     }
-//   };
-// }
-
 return (
   <div className="min-h-screen bg-gray-50">
     {/* Header */}
