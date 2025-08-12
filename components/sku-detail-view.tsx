@@ -51,16 +51,12 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       });
     });
     
-    // Add warehouses from stock movements
-    console.log('Processing stock movements to create warehouses...');
     stockMovementData?.forEach((movement) => {
       const sourceWarehouse = movement.warehouse?.code;
       const destWarehouse = movement.warehouse_dest?.code;
       
-      console.log(`Movement ${movement.id}: source=${sourceWarehouse}, dest=${destWarehouse}`);
       
       if (sourceWarehouse && !warehouses.has(sourceWarehouse)) {
-        console.log(`Adding source warehouse: ${sourceWarehouse}`);
         warehouses.set(sourceWarehouse, {
           warehouse: movement.warehouse?.name || sourceWarehouse,
           warehouseCode: sourceWarehouse,
@@ -72,7 +68,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       }
       
       if (destWarehouse && !warehouses.has(destWarehouse)) {
-        console.log(`Adding dest warehouse: ${destWarehouse}`);
         warehouses.set(destWarehouse, {
           warehouse: movement.warehouse_dest?.name || destWarehouse,
           warehouseCode: destWarehouse,
@@ -85,15 +80,11 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     });
     
     const result = Array.from(warehouses.values());
-    console.log('Warehouse data processed:', result);
-    console.log('Warehouse data length:', result.length);
-    console.log('Warehouse codes:', result.map(w => w.warehouseCode));
     return result;
   }, [sku.warehouse_inventory, stockMovementData, openingStocks, forceUpdate]);
 
   // Enhanced function to get stock movement data for a warehouse
   const getWarehouseMovements = (warehouseCode: string) => {
-    console.log(`Getting movements for warehouse: ${warehouseCode}, data length: ${stockMovementData?.length}`);
     // Process stock movement data to aggregate by warehouse
     const warehouseMovements = stockMovementData.reduce((acc, movement) => {
       const sourceWarehouse = movement.warehouse?.code;
@@ -154,7 +145,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       consumption: 0
     });
     
-    console.log(`Movements for warehouse ${warehouseCode}:`, warehouseMovements);
     return warehouseMovements;
   };
 
@@ -222,7 +212,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
   useEffect(() => {
     const fetchStockMovementData = async () => {
-      if (!sku?.odoo_id && !sku?.id) {
+      if (!sku?.odoo_id == null && !sku?.id == null) {
         console.warn("No product ID available for stock movement data");
         return;
       }
@@ -233,21 +223,18 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         const productId = sku.odoo_id?.toString() || sku.id?.toString() || "";
         
         // Use date range API
-        const response = await apiClient.getStockMovementDetailsByDateRange(
+        const {success, data, opening_stocks} = await apiClient.getStockMovementDetailsByDateRange(
           productId,
           dateRange.startDate,
           dateRange.endDate
         );
-        const data = response;
+        console.log(success)
+        console.log(data)
+        console.log(opening_stocks)
         
-        
-        if (data.success) {
-          console.log('Stock movement data received:', data.data);
-          console.log('Opening stocks:', data.opening_stocks);
-          console.log('Opening stocks keys:', Object.keys(data.opening_stocks || {}));
-          console.log('Setting stock movement data with length:', data.data?.length);
-          setStockMovementData(data.data);
-          setOpeningStocks(data.opening_stocks || {});
+        if (success) {
+          setStockMovementData(data);
+          setOpeningStocks(opening_stocks || {});
           
           // Fetch stock variance data for the end date
           try {
@@ -261,11 +248,9 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             if (varianceData.success) {
               setStockVarianceData(varianceData.data);
             } else {
-              console.log("Stock variance API returned error:", varianceData.error);
               setStockVarianceData([]);
             }
           } catch (varianceErr) {
-            console.log("No stock variance data available:", varianceErr);
             setStockVarianceData([]);
           }
         }
@@ -279,28 +264,19 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
     fetchStockMovementData();
   }, [sku.odoo_id, sku.id, dateRange.startDate, dateRange.endDate]);
-  useEffect(() => {
-    console.log('=== STOCK MOVEMENT DATA CHANGED ===');
-    console.log('New stockMovementData:', stockMovementData);
-    console.log('Length:', stockMovementData?.length);
-    
+
+  useEffect(() => { 
     // Force a re-calculation by updating a dummy state if needed
     setForceUpdate(prev => prev + 1);
   }, [stockMovementData]);
   
   // Monitor state changes
   useEffect(() => {
-    console.log('Stock movement data state changed:', stockMovementData?.length);
   }, [stockMovementData]);
 
   useEffect(() => {
-    console.log('Opening stocks state changed:', Object.keys(openingStocks));
   }, [openingStocks]);
 
-  console.log('Rendering component with warehouseData:', warehouseData);
-  console.log('Stock movement data:', stockMovementData);
-  console.log('SKU warehouse inventory:', sku.warehouse_inventory);
-  console.log('Table rendering condition - warehouseData length:', warehouseData.length);
   
   return (
     <div className="min-h-screen bg-gray-50">

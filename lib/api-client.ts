@@ -167,7 +167,7 @@ class ApiClient {
 
   // Inventory methods
   async getInventory(): Promise<{ data: InventoryItem[]; total: number }> {
-    const response = await this.request<{ data: InventoryItem[]; total: number }>('/inventory');
+    const response = await this.request<InventoryItem[]>('/inventory');
     
     if (response.success && response.data) {
       // The response structure is { success: true, data: Array, total: number }
@@ -181,7 +181,7 @@ class ApiClient {
   }
 
   async getInventoryWithFilters(queryParams: string): Promise<{ data: InventoryItem[]; total: number }> {
-    const response = await this.request<{ data: InventoryItem[]; total: number }>(`/inventory?${queryParams}`);
+    const response = await this.request<InventoryItem[]>(`/inventory?${queryParams}`) ;
     
     if (response.success && response.data) {
       return {
@@ -226,14 +226,14 @@ class ApiClient {
   }
 
   async getStockMovementDetailsByDateRange(productId: string, startDate: string, endDate: string): Promise<{ success: boolean; data: StockMovement[]; opening_stocks?: Record<string, number> }> {
-    const response = await this.request<{ data: StockMovement[]; opening_stocks?: Record<string, number> }>(
-      `/inventory/stock-movements/${productId}?start_date=${startDate}&end_date=${endDate}`
+    const response = await this.request<StockMovement[]>(
+      `/inventory/stock-movements/date-range/${productId}?start_date=${startDate}&end_date=${endDate}`
     );
     if (response.success && response.data) {
       return { 
         success: true, 
-        data: response.data.data || [], 
-        opening_stocks: response.data.opening_stocks 
+        data: response.data || [], 
+        opening_stocks: (response as any).opening_stocks 
       };
     }
     throw new Error(response.error || 'Failed to get stock movement details');
