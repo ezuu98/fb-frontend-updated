@@ -78,7 +78,7 @@ export class InventoryAPI {
           } else if (movement_type === "sales") {
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
           } else if (movement_type === "sales_returns") {
-            if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, +quantity)
+            if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, Math.abs(quantity))
           } else if (movement_type === "transfer_in") {
             if (warehouse_dest_id) updateWarehouseStock(product_id, warehouse_dest_id, quantity)
             if (warehouse_id) updateWarehouseStock(product_id, warehouse_id, -quantity)
