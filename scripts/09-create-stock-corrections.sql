@@ -1,11 +1,11 @@
 -- Create stock_corrections table for tracking uploaded actual stock counts per warehouse
 CREATE TABLE IF NOT EXISTS stock_corrections (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  product_id INTEGER NOT NULL, -- Matches inventory.id (INTEGER)
-  warehouse_id UUID NOT NULL, -- Matches warehouse ID (UUID)
+  product_id INTEGER NOT NULL, -- Matches inventory.odoo_id (INTEGER)
+  warehouse_id UUID NOT NULL, -- Matches warehouse UUID (UUID)
   barcode VARCHAR(50) NOT NULL,
   correction_date DATE NOT NULL,
-  corrected_stock INTEGER NOT NULL,
+  corrected_stock INTEGER NOT NULL CHECK (corrected_stock >= 0), -- Prevent negative stock
   uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   uploaded_by UUID REFERENCES profiles(id),
   notes TEXT,
@@ -51,7 +51,7 @@ DROP FUNCTION IF EXISTS get_stock_variance_by_warehouse(INTEGER, DATE);
 DROP FUNCTION IF EXISTS get_opening_stock_by_warehouse(NUMERIC, DATE);
 DROP FUNCTION IF EXISTS get_opening_stock_by_warehouse(INTEGER, DATE);
 
--- Function to get stock variance for a product on a specific date per warehouse (aggregated by warehouse code)
+-- Function to get stock variance for a product on a specific date per warehouse
 CREATE OR REPLACE FUNCTION get_stock_variance_by_warehouse(
   p_product_id NUMERIC,
   p_date DATE
@@ -75,18 +75,18 @@ BEGIN
       COALESCE(wi.quantity, 0) + COALESCE(
         (SELECT SUM(
           CASE 
-            WHEN sm.movement_type IN ('purchase', 'transfer_in', 'adjustment', 'return') THEN sm.quantity
-            WHEN sm.movement_type IN ('sale', 'transfer_out', 'wastage') THEN -sm.quantity
+            WHEN sm.movement_type IN ('purchase', 'transfer_in', 'adjustment', 'return', 'manufacturing_in', 'sales_returns') THEN sm.quantity
+            WHEN sm.movement_type IN ('sale', 'transfer_out', 'wastage', 'manufacturing_out', 'purchase_returns', 'consumption') THEN -sm.quantity
             ELSE 0
           END
         )
         FROM stock_movements sm
         WHERE sm.product_id = p_product_id
           AND sm.warehouse_id = w.id
-          AND DATE(sm.created_at) <= p_date), 0
+          AND DATE(sm.date) <= p_date), 0
       ) as calc_stock
     FROM warehouses w
-    LEFT JOIN warehouse_inventory wi ON w.id = wi.wh_id 
+    LEFT JOIN warehouse_inventory wi ON w.id::numeric = wi.wh_id 
       AND wi.product_id = p_product_id
   ),
   corrections AS (
@@ -95,32 +95,20 @@ BEGIN
       sc.warehouse_id as correction_warehouse_id,
       sc.corrected_stock
     FROM stock_corrections sc
-    WHERE sc.product_id = p_product_id
+    WHERE sc.product_id = p_product_id::INTEGER
       AND sc.correction_date = p_date
-  ),
-  aggregated_data AS (
-    -- Aggregate by warehouse code
-    SELECT 
-      cs.warehouse_code,
-      cs.warehouse_name,
-      SUM(cs.calc_stock) as total_calc_stock,
-      SUM(COALESCE(c.corrected_stock, cs.calc_stock)) as total_corrected_stock,
-      MAX(cs.warehouse_id) as warehouse_id, -- Use one warehouse ID per code
-      BOOL_OR(c.corrected_stock IS NOT NULL) as has_correction
-    FROM calculated_stock cs
-    LEFT JOIN corrections c ON cs.warehouse_id = c.correction_warehouse_id
-    GROUP BY cs.warehouse_code, cs.warehouse_name
   )
   SELECT 
-    ad.warehouse_id,
-    ad.warehouse_code,
-    ad.warehouse_name,
-    ad.total_calc_stock::INTEGER as calculated_closing_stock,
-    ad.total_corrected_stock::INTEGER as corrected_closing_stock,
-    (ad.total_calc_stock - ad.total_corrected_stock)::INTEGER as stock_variance,
-    ad.has_correction
-  FROM aggregated_data ad
-  ORDER BY ad.warehouse_code;
+    cs.warehouse_id,
+    cs.warehouse_code,
+    cs.warehouse_name,
+    cs.calc_stock::INTEGER as calculated_closing_stock,
+    COALESCE(c.corrected_stock, cs.calc_stock)::INTEGER as corrected_closing_stock,
+    (cs.calc_stock - COALESCE(c.corrected_stock, cs.calc_stock))::INTEGER as stock_variance,
+    (c.corrected_stock IS NOT NULL) as has_correction
+  FROM calculated_stock cs
+  LEFT JOIN corrections c ON cs.warehouse_id = c.correction_warehouse_id
+  ORDER BY cs.warehouse_code;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -149,18 +137,18 @@ BEGIN
       COALESCE(wi.quantity, 0) + COALESCE(
         (SELECT SUM(
           CASE 
-            WHEN sm.movement_type IN ('purchase', 'transfer_in', 'adjustment', 'return') THEN sm.quantity
-            WHEN sm.movement_type IN ('sale', 'transfer_out', 'wastage') THEN -sm.quantity
+            WHEN sm.movement_type IN ('purchase', 'transfer_in', 'adjustment', 'return', 'manufacturing_in', 'sales_returns') THEN sm.quantity
+            WHEN sm.movement_type IN ('sale', 'transfer_out', 'wastage', 'manufacturing_out', 'purchase_returns', 'consumption') THEN -sm.quantity
             ELSE 0
           END
         )
         FROM stock_movements sm
         WHERE sm.product_id = p_product_id
           AND sm.warehouse_id = w.id
-          AND DATE(sm.created_at) <= p_date), 0
+          AND DATE(sm.date) <= p_date), 0
       ) as calc_stock
     FROM warehouses w
-    LEFT JOIN warehouse_inventory wi ON w.id = wi.wh_id 
+    LEFT JOIN warehouse_inventory wi ON w.id::numeric = wi.wh_id 
       AND wi.product_id = p_product_id
   ),
   corrections AS (
@@ -169,34 +157,22 @@ BEGIN
       sc.warehouse_id as correction_warehouse_id,
       sc.corrected_stock
     FROM stock_corrections sc
-    WHERE sc.product_id = p_product_id
+    WHERE sc.product_id = p_product_id::INTEGER
       AND sc.correction_date = p_date
   ),
-  aggregated_data AS (
-    -- Aggregate by warehouse code
-    SELECT 
-      cs.warehouse_code,
-      cs.warehouse_name,
-      SUM(cs.calc_stock) as total_calc_stock,
-      SUM(COALESCE(c.corrected_stock, cs.calc_stock)) as total_corrected_stock,
-      MAX(cs.warehouse_id) as warehouse_id, -- Use one warehouse ID per code
-      BOOL_OR(c.corrected_stock IS NOT NULL) as has_correction
-    FROM calculated_stock cs
-    LEFT JOIN corrections c ON cs.warehouse_id = c.correction_warehouse_id
-    GROUP BY cs.warehouse_code, cs.warehouse_name
-  ),
-  warehouse_totals AS (
+  warehouse_data AS (
     -- Individual warehouse rows
     SELECT 
-      ad.warehouse_id,
-      ad.warehouse_code,
-      ad.warehouse_name,
-      ad.total_calc_stock::INTEGER as calculated_closing_stock,
-      ad.total_corrected_stock::INTEGER as corrected_closing_stock,
-      (ad.total_calc_stock - ad.total_corrected_stock)::INTEGER as stock_variance,
-      ad.has_correction,
+      cs.warehouse_id,
+      cs.warehouse_code,
+      cs.warehouse_name,
+      cs.calc_stock::INTEGER as calculated_closing_stock,
+      COALESCE(c.corrected_stock, cs.calc_stock)::INTEGER as corrected_closing_stock,
+      (cs.calc_stock - COALESCE(c.corrected_stock, cs.calc_stock))::INTEGER as stock_variance,
+      (c.corrected_stock IS NOT NULL) as has_correction,
       false as is_total
-    FROM aggregated_data ad
+    FROM calculated_stock cs
+    LEFT JOIN corrections c ON cs.warehouse_id = c.correction_warehouse_id
   ),
   grand_total AS (
     -- Grand total row
@@ -204,14 +180,14 @@ BEGIN
       NULL::UUID as warehouse_id,
       'TOTAL' as warehouse_code,
       'Total' as warehouse_name,
-      SUM(ad.total_calc_stock)::INTEGER as calculated_closing_stock,
-      SUM(ad.total_corrected_stock)::INTEGER as corrected_closing_stock,
-      SUM(ad.total_calc_stock - ad.total_corrected_stock)::INTEGER as stock_variance,
-      BOOL_OR(ad.has_correction) as has_correction,
+      SUM(wd.calculated_closing_stock)::INTEGER as calculated_closing_stock,
+      SUM(wd.corrected_closing_stock)::INTEGER as corrected_closing_stock,
+      SUM(wd.stock_variance)::INTEGER as stock_variance,
+      BOOL_OR(wd.has_correction) as has_correction,
       true as is_total
-    FROM aggregated_data ad
+    FROM warehouse_data wd
   )
-  SELECT * FROM warehouse_totals
+  SELECT * FROM warehouse_data
   UNION ALL
   SELECT * FROM grand_total
   ORDER BY is_total, warehouse_code;
@@ -233,37 +209,39 @@ DECLARE
   error_cnt INTEGER := 0;
   error_list JSONB := '[]'::JSONB;
   product_odoo_id NUMERIC;
-  warehouse_id UUID;
+  warehouse_uuid UUID;
 BEGIN
   -- Process each correction in the JSON array
-  FOR rec IN SELECT * FROM jsonb_array_elements(corrections_data)
+  FOR rec IN SELECT * FROM jsonb_array_elements(corrections_data) AS elem
   LOOP
     BEGIN
       -- Find product by barcode
       SELECT odoo_id INTO product_odoo_id
       FROM inventory 
-      WHERE barcode = (rec.value->>'barcode');
+      WHERE barcode = (rec->>'barcode')
+        AND active = true;
       
       IF product_odoo_id IS NULL THEN
         error_cnt := error_cnt + 1;
         error_list := error_list || jsonb_build_object(
-          'barcode', rec.value->>'barcode',
-          'warehouse_code', rec.value->>'warehouse_code',
+          'barcode', rec->>'barcode',
+          'warehouse_code', rec->>'warehouse_code',
           'error', 'Product not found'
         );
         CONTINUE;
       END IF;
 
-      -- Find warehouse by code
-      SELECT uuid INTO warehouse_id
+      -- Find warehouse UUID by code
+      SELECT uuid INTO warehouse_uuid
       FROM warehouses 
-      WHERE code = (rec.value->>'warehouse_code');
+      WHERE code = (rec->>'warehouse_code')
+        AND active = true;
       
-      IF warehouse_id IS NULL THEN
+      IF warehouse_uuid IS NULL THEN
         error_cnt := error_cnt + 1;
         error_list := error_list || jsonb_build_object(
-          'barcode', rec.value->>'barcode',
-          'warehouse_code', rec.value->>'warehouse_code',
+          'barcode', rec->>'barcode',
+          'warehouse_code', rec->>'warehouse_code',
           'error', 'Warehouse not found'
         );
         CONTINUE;
@@ -278,11 +256,11 @@ BEGIN
         corrected_stock,
         uploaded_by
       ) VALUES (
-        product_odoo_id,
-        warehouse_id,
-        rec.value->>'barcode',
-        TO_DATE(rec.value->>'date', 'DD/MM/YYYY'),
-        (rec.value->>'stock_quantity')::INTEGER,
+        product_odoo_id::INTEGER,
+        warehouse_uuid,
+        rec->>'barcode',
+        (rec->>'date')::DATE,
+        (rec->>'stock_quantity')::INTEGER,
         uploader_id
       ) ON CONFLICT (product_id, warehouse_id, correction_date) 
       DO UPDATE SET 
@@ -295,8 +273,8 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN
       error_cnt := error_cnt + 1;
       error_list := error_list || jsonb_build_object(
-        'barcode', rec.value->>'barcode',
-        'warehouse_code', rec.value->>'warehouse_code',
+        'barcode', rec->>'barcode',
+        'warehouse_code', rec->>'warehouse_code',
         'error', SQLERRM
       );
     END;
@@ -325,18 +303,18 @@ BEGIN
     COALESCE(wi.quantity, 0) + COALESCE(
       (SELECT SUM(
         CASE 
-          WHEN sm.movement_type IN ('purchase', 'transfer_in', 'adjustment', 'return') THEN sm.quantity
-          WHEN sm.movement_type IN ('sale', 'transfer_out', 'wastage') THEN -sm.quantity
+          WHEN sm.movement_type IN ('purchase', 'transfer_in', 'adjustment', 'return', 'manufacturing_in', 'sales_returns') THEN sm.quantity
+          WHEN sm.movement_type IN ('sale', 'transfer_out', 'wastage', 'manufacturing_out', 'purchase_returns', 'consumption') THEN -sm.quantity
           ELSE 0
         END
       )
       FROM stock_movements sm
       WHERE sm.product_id = p_product_id
         AND sm.warehouse_id = w.id
-        AND DATE(sm.created_at) < p_date), 0
+        AND DATE(sm.date) < p_date), 0
     ) as opening_stock
   FROM warehouses w
-  LEFT JOIN warehouse_inventory wi ON w.id = wi.wh_id 
+  LEFT JOIN warehouse_inventory wi ON w.id::numeric = wi.wh_id 
     AND wi.product_id = p_product_id
   ORDER BY w.code;
 END;

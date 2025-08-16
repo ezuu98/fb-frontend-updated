@@ -237,6 +237,19 @@ class ApiClient {
     throw new Error(response.error || 'Failed to get stock movement details');
   }
 
+  async getAllStockMovements(productId: string): Promise<{ success: boolean; data: StockMovement[] }> {
+    const response = await this.request<StockMovement[]>(
+      `/inventory/stock-movements/all/${productId}`
+    );
+    if (response.success && response.data) {
+      return { 
+        success: true, 
+        data: response.data || []
+      };
+    }
+    throw new Error(response.error || 'Failed to get all stock movements');
+  }
+
   // Sync methods
   async syncPurchases(): Promise<{ success: boolean; count: number }> {
     const response = await this.request<{ success: boolean; count: number }>('/sync/purchases', {
@@ -278,16 +291,16 @@ class ApiClient {
     throw new Error(response.error || 'Failed to sync all data');
   }
 
-  // Stock Corrections methods
-  async uploadStockCorrections(corrections: any[]): Promise<{ success_count: number; error_count: number; errors: any[] }> {
+  // Stock Variance methods
+  async uploadStockVariance(variances: any[]): Promise<{ success_count: number; error_count: number; errors: any[] }> {
     const response = await this.request<{ success_count: number; error_count: number; errors: any[] }>('/stock-corrections/upload', {
       method: 'POST',
-      body: JSON.stringify({ corrections }),
+      body: JSON.stringify({ variances }),
     });
     if (response.success && response.data) {
       return response.data;
     }
-    throw new Error(response.error || 'Failed to upload stock corrections');
+    throw new Error(response.error || 'Failed to upload stock variances');
   }
 
   // Utility methods

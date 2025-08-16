@@ -336,11 +336,12 @@ export class StockMovementService {
   }
 
   /**
-   * Get stock variance with totals for a specific product and date
+   * Get stock variance for a specific product and date range
    */
-  static async getStockVarianceWithTotals(
+  static async getStockVariance(
     productId: string,
-    date: string
+    startDate: string,
+    endDate: string
   ): Promise<{
     success: boolean;
     data: Array<{
@@ -348,15 +349,20 @@ export class StockMovementService {
       warehouse_code: string;
       warehouse_name: string;
       calculated_closing_stock: number;
-      corrected_closing_stock: number;
       stock_variance: number;
-      has_correction: boolean;
-      is_total: boolean;
+      closing_stock: number;
+      has_variance: boolean;
     }>;
   }> {
     try {
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+        throw new Error('Invalid date format. Expected YYYY-MM-DD');
+      }
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-with-totals/${productId}?date=${date}`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance/${productId}?start_date=${startDate}&end_date=${endDate}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
@@ -366,10 +372,73 @@ export class StockMovementService {
       );
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
+      
+      // Validate response structure
+      if (!result.success || !Array.isArray(result.data)) {
+        throw new Error('Invalid response format from server');
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Error in getStockVariance:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get stock variance with totals for a specific product and date range
+   */
+  static async getStockVarianceWithTotals(
+    productId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<{
+    success: boolean;
+    data: Array<{
+      warehouse_id: string;
+      warehouse_code: string;
+      warehouse_name: string;
+      calculated_closing_stock: number;
+      stock_variance: number;
+      closing_stock: number;
+      has_variance: boolean;
+      is_total: boolean;
+    }>;
+  }> {
+    try {
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+        throw new Error('Invalid date format. Expected YYYY-MM-DD');
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-with-totals/${productId}?start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Validate response structure
+      if (!result.success || !Array.isArray(result.data)) {
+        throw new Error('Invalid response format from server');
+      }
+
       return result;
     } catch (error) {
       console.error("Error in getStockVarianceWithTotals:", error);

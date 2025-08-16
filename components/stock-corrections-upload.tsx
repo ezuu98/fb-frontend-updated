@@ -20,9 +20,9 @@ interface UploadResult {
   }>;
 }
 
-interface StockCorrection {
+interface StockVariance {
   date: string;
-  stock_quantity: number;
+  variance_quantity: number;
   barcode: string;
   warehouse_code: string;
 }
@@ -33,7 +33,7 @@ export function StockCorrectionsUpload() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
-  const [previewData, setPreviewData] = useState<StockCorrection[]>([])
+  const [previewData, setPreviewData] = useState<StockVariance[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,7 +48,7 @@ export function StockCorrectionsUpload() {
   const parseFile = async (file: File) => {
     try {
       const text = await file.text()
-      let data: StockCorrection[] = []
+      let data: StockVariance[] = []
 
       if (file.name.endsWith('.csv')) {
         data = parseCSV(text)
@@ -65,35 +65,58 @@ export function StockCorrectionsUpload() {
     }
   }
 
-  const parseCSV = (csvText: string): StockCorrection[] => {
-    const lines = csvText.trim().split('\n')
-    const headers = lines[0].toLowerCase().split(',').map(h => h.trim())
+  const parseCSV = (csvText: string): StockVariance[] => {
+    const lines = csvText.trim().split('\n');
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
     
-    // Find column indices
-    const dateIndex = headers.findIndex(h => h.includes('date'))
-    const stockIndex = headers.findIndex(h => h.includes('stock') || h.includes('quantity'))
-    const barcodeIndex = headers.findIndex(h => h.includes('barcode'))
-    const warehouseIndex = headers.findIndex(h => h.includes('warehouse'))
+    // Find column indices - updated to match your template
+    const dateIndex = headers.findIndex(h => h.includes('date'));
+    const varianceIndex = headers.findIndex(h => h.includes('variance') || h.includes('quantity'));
+    const barcodeIndex = headers.findIndex(h => h.includes('barcode'));
+    const warehouseIndex = headers.findIndex(h => h.includes('warehouse'));
 
-    if (dateIndex === -1 || stockIndex === -1 || barcodeIndex === -1 || warehouseIndex === -1) {
-      throw new Error('Required columns not found. Please ensure your CSV has: date, stock_quantity, barcode, warehouse_code')
+    if (dateIndex === -1 || varianceIndex === -1 || barcodeIndex === -1 || warehouseIndex === -1) {
+      throw new Error('Required columns not found. Please ensure your CSV has: date, variance_quantity, barcode, warehouse_code');
     }
 
-    const data: StockCorrection[] = []
+    const data: StockVariance[] = [];
     
     for (let i = 1; i < lines.length; i++) {
-      const row = lines[i].split(',').map(cell => cell.trim())
+      const row = lines[i].split(',').map(cell => cell.trim().replace(/"/g, ''));
       if (row.length >= 4) {
+        const date = row[dateIndex];
+        const varianceQty = parseInt(row[varianceIndex]);
+        const barcode = row[barcodeIndex];
+        const warehouseCode = row[warehouseIndex];
+
+        // Validate data
+        if (!date || !barcode || !warehouseCode) {
+          console.warn(`Skipping row ${i + 1}: Missing required data`);
+          continue;
+        }
+
+        if (isNaN(varianceQty)) {
+          console.warn(`Skipping row ${i + 1}: Invalid variance quantity: ${row[varianceIndex]}`);
+          continue;
+        }
+
+        // Validate date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(date)) {
+          console.warn(`Skipping row ${i + 1}: Invalid date format: ${date}. Expected YYYY-MM-DD`);
+          continue;
+        }
+
         data.push({
-          date: row[dateIndex].replace(/"/g, ''),
-          stock_quantity: parseInt(row[stockIndex].replace(/"/g, '')),
-          barcode: row[barcodeIndex].replace(/"/g, ''),
-          warehouse_code: row[warehouseIndex].replace(/"/g, '')
-        })
+          date,
+          variance_quantity: varianceQty,
+          barcode,
+          warehouse_code: warehouseCode
+        });
       }
     }
 
-    return data
+    return data;
   }
 
   const handleUpload = async () => {
@@ -104,14 +127,14 @@ export function StockCorrectionsUpload() {
 
     try {
       const text = await file.text()
-      const corrections = parseCSV(text)
+      const variances = parseCSV(text)
 
       // Simulate progress
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => Math.min(prev + 10, 90))
       }, 100)
 
-      const result = await apiClient.uploadStockCorrections(corrections)
+      const result = await apiClient.uploadStockVariance(variances)
 
       clearInterval(progressInterval)
       setUploadProgress(100)
@@ -247,7 +270,7 @@ export function StockCorrectionsUpload() {
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-4 py-2 grid grid-cols-4 gap-4 text-sm font-medium">
                   <span>Date</span>
-                  <span>Stock Quantity</span>
+                  <span>Variance Quantity</span>
                   <span>Barcode</span>
                   <span>Warehouse Code</span>
                 </div>
@@ -255,7 +278,7 @@ export function StockCorrectionsUpload() {
                   {previewData.map((row, index) => (
                     <div key={index} className="px-4 py-2 grid grid-cols-4 gap-4 text-sm border-t">
                       <span>{row.date}</span>
-                      <span>{row.stock_quantity}</span>
+                      <span>{row.variance_quantity}</span>
                       <span className="font-mono">{row.barcode}</span>
                       <span className="font-mono">{row.warehouse_code}</span>
                     </div>
@@ -264,7 +287,7 @@ export function StockCorrectionsUpload() {
               </div>
               <div className="flex justify-end">
                 <Button onClick={handleUpload} disabled={uploading}>
-                  Upload {previewData.length}+ Corrections
+                  Upload {previewData.length}+ Variances
                 </Button>
               </div>
             </div>
