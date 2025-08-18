@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, ChevronDown, User, LogOut, AlertTriangle, Edit, Database } from "lucide-react"
+import { Search, ChevronDown, User, LogOut, AlertTriangle, Edit, Database, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -46,6 +46,7 @@ export function InventoryDashboard() {
   const [selectedSku, setSelectedSku] = useState<InventoryItem | null>(null)
   const [showOdooSync, setShowOdooSync] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const itemsPerPage = 30
 
@@ -92,6 +93,55 @@ export function InventoryDashboard() {
 
   const handleLogout = async () => {
     await logout()
+  }
+
+  const handleSyncAll = async () => {
+    setIsSyncing(true);
+    try {
+      // Call the sync API endpoint
+      const response = await fetch(process.env.NEXT_PUBLIC_API_URL+'/sync/all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.token || ''}`,
+        },
+        body: JSON.stringify({
+          syncType: 'full',
+          includeMovements: true,
+          includePricing: true
+        })
+      });
+      console.log(response)
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Sync failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Refresh the inventory data after successful sync
+      await refetch();
+      
+      // Show success notification
+      console.log('Sync completed successfully:', result);
+      
+      // Optional: You can add a toast notification here
+      // toast.success(`Successfully synced ${result.syncedCount || 'all'} items`);
+      
+    } catch (error) {
+      console.error('Sync failed:', error);
+      
+      // Optional: You can add a toast notification here
+      // toast.error(`Sync failed: ${error.message}`);
+      
+      // For now, we'll just log the error
+      // In a production app, you'd want to show this to the user
+      alert(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+    } finally {
+      setIsSyncing(false);
+    }
   }
 
   // Handle pagination
@@ -347,6 +397,14 @@ return (
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Live Inventory Tracking</h1>
           <div className="flex space-x-2">
+            <Button 
+              onClick={handleSyncAll} 
+              disabled={isSyncing}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync All'}
+            </Button>
             <Dialog open={showOdooSync} onOpenChange={setShowOdooSync}>
               <DialogTrigger asChild>
                 {/* <Button variant="outline">
