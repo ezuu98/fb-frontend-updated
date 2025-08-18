@@ -277,7 +277,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         - Math.abs(movements.wastages)
         - Math.abs(movements.consumption);
 
-      totalClosingStock += Math.max(0, closingStock); // Ensure no negative stock
+      totalClosingStock += closingStock; // Ensure no negative stock
     });
 
     return {
@@ -589,7 +589,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                       {warehouseData.map((row, index) => {
                         const movements = getWarehouseMovements(row.warehouseCode);
 
-                        const closingStock = Math.max(0,
+                        const closingStock = 
                           row.openingStock
                           + movements.purchases
                           + movements.transfer_in
@@ -600,7 +600,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                           - Math.abs(movements.transfer_out)
                           - Math.abs(movements.wastages)
                           - Math.abs(movements.consumption)
-                        );
+                        ;
 
                         // Get variance data for this warehouse
                         const warehouseVariance = stockVarianceData.find(
@@ -649,16 +649,16 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                       {/* Total Row */}
                       <TableRow className="bg-gray-50 border-t-2 border-gray-200">
                         <TableCell className="font-bold">Total</TableCell>
-                        <TableCell className="text-center font-bold text-blue-600">{totals.totalOpeningStock}</TableCell>
-                        <TableCell className="text-center font-bold text-green-600">{totals.totalPurchases}</TableCell>
-                        <TableCell className="text-center font-bold text-orange-600">{totals.totalPurchaseReturns}</TableCell>
-                        <TableCell className="text-center font-bold text-red-600">{totals.totalSales}</TableCell>
-                        <TableCell className="text-center font-bold text-red-600">{totals.totalSalesReturns}</TableCell>
-                        <TableCell className="text-center font-bold text-red-500">{totals.totalWastages}</TableCell>
-                        <TableCell className="text-center font-bold text-green-500">{totals.totalTransferIN}</TableCell>
-                        <TableCell className="text-center font-bold text-red-500">{totals.totalTransferOUT}</TableCell>
-                        <TableCell className="text-center font-bold text-blue-500">{totals.totalManufacturing}</TableCell>
-                        <TableCell className="text-center font-bold text-blue-500">{totals.totalConsumption}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-600">{totals.totalOpeningStock.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-green-600">{totals.totalPurchases.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-orange-600">{totals.totalPurchaseReturns.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-red-600">{totals.totalSales.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-red-600">{totals.totalSalesReturns.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-red-500">{totals.totalWastages.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-green-500">{totals.totalTransferIN.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-red-500">{totals.totalTransferOUT.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-500">{totals.totalManufacturing.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-500">{totals.totalConsumption.toFixed(2)}</TableCell>
                         <TableCell className="text-center font-bold">
                           {stockVarianceData.length > 0 ? (
                             <Badge 

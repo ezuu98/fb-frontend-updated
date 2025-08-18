@@ -187,7 +187,6 @@ export function LoginPage() {
                 }}
                 className="text-sm text-blue-600 hover:text-blue-800"
               >
-                {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
               </button>
             </div>
 
@@ -202,20 +201,9 @@ export function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Demo Info */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 className="text-sm font-medium text-blue-900 mb-2">Getting Started</h3>
-          <div className="text-xs text-blue-700 space-y-1">
-            <p>• Create an account to access the inventory system</p>
-            <p>• All new users start with 'staff' role</p>
-            <p>• Check your email for confirmation after signup</p>
-            <p>• Sample inventory data is already loaded</p>
-          </div>
-        </div>
-
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-500">
-          <p>©2024 FreshBasket. All rights reserved.</p>
+          <p>©2025 FreshBasket. All rights reserved.</p>
           <div className="mt-2 space-x-4">
             <a href="#" className="hover:text-gray-700">
               Privacy Policy
