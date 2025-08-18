@@ -165,9 +165,9 @@ export function StockCorrectionsUpload() {
 
   const downloadTemplate = () => {
     const csvContent = `date,stock_quantity,barcode,warehouse_code
-2024-01-31,100,1234567890123,BDRWH
-2024-01-31,250,1234567890123,MHOWH
-2024-01-31,75,9876543210987,BDRWH`
+2024-01-31,100,1234567890123,WH001
+2024-01-31,250,1234567890123,WH002
+2024-01-31,75,9876543210987,WH001`
     
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)

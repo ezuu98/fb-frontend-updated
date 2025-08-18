@@ -47,6 +47,8 @@ export function InventoryDashboard() {
   const [showOdooSync, setShowOdooSync] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<string | null>(null);
+  const [lastSyncLoading, setLastSyncLoading] = useState(true);
   
   const itemsPerPage = 30
 
@@ -65,6 +67,44 @@ export function InventoryDashboard() {
   } = useInventory(1, itemsPerPage)
 
   const { user, logout } = useAuth()
+
+  // Function to fetch last sync timestamp
+  const fetchLastSyncTimestamp = async () => {
+    try {
+      setLastSyncLoading(true);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/sync/status`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data.metadata) {
+          // Find the most recent sync timestamp across all data types
+          const timestamps = data.data.metadata
+            .map((item: any) => item.last_sync_timestamp)
+            .filter((timestamp: string) => timestamp !== null)
+            .map((timestamp: string) => new Date(timestamp));
+          
+          if (timestamps.length > 0) {
+            const mostRecent = new Date(Math.max(...timestamps.map(d => d.getTime())));
+            setLastSyncTimestamp(mostRecent.toLocaleString());
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching sync status:', error);
+    } finally {
+      setLastSyncLoading(false);
+    }
+  };
+
+  // Fetch sync status on component mount
+  useEffect(() => {
+    fetchLastSyncTimestamp();
+  }, []);
 
   const debouncedSearch = useMemo(
     () => debounce((query: string) => {
@@ -103,7 +143,7 @@ export function InventoryDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.token || ''}`,
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
         },
         body: JSON.stringify({
           syncType: 'full',
@@ -122,6 +162,9 @@ export function InventoryDashboard() {
       
       // Refresh the inventory data after successful sync
       await refetch();
+      
+      // Refresh the last sync timestamp
+      await fetchLastSyncTimestamp();
       
       // Show success notification
       console.log('Sync completed successfully:', result);
@@ -160,27 +203,12 @@ export function InventoryDashboard() {
     }
     
     return inventory.map((item) => {
-      const warehouseMap: Record<string, number> = {
-        bdrwh: 0,
-        mhowh: 0,
-        sbzwh: 0,
-        cliwh: 0,
-        bhdwh: 0,
-        ecmwh: 0,
-      };
-
-      const validWarehouseCodes = Object.keys(warehouseMap);
-
-      item.warehouse_inventory?.forEach((wh) => {
-        const whCode = wh.warehouse?.code?.toLowerCase();
-        if (whCode && validWarehouseCodes.includes(whCode)) {
-          // Use calculated stock quantity from movements if available, otherwise use static quantity
-          const stockQuantity = wh.stock_quantity !== undefined ? wh.stock_quantity : wh.quantity || 0;
-          warehouseMap[whCode] = stockQuantity;
-        }
-      });
-
-      const totalStock = Object.values(warehouseMap).reduce((sum, qty) => sum + qty, 0);
+      // Calculate total stock from all warehouses
+      const totalStock = item.warehouse_inventory?.reduce((sum, wh) => {
+        const stockQuantity = wh.stock_quantity !== undefined ? wh.stock_quantity : wh.quantity || 0;
+        return sum + stockQuantity;
+      }, 0) || 0;
+      
       const isLowStock = totalStock <= item.reordering_min_qty;
 
       return {
@@ -188,12 +216,6 @@ export function InventoryDashboard() {
         barcode: item.barcode,
         product: item.name,
         category: item.category?.display_name || "Uncategorized",
-        bdrwh: warehouseMap.bdrwh,
-        mhowh: warehouseMap.mhowh,
-        sbzwh: warehouseMap.sbzwh,
-        cliwh: warehouseMap.cliwh,
-        bhdwh: warehouseMap.bhdwh,
-        ecmwh: warehouseMap.ecmwh,
         totalStock,
         isLowStock,
         reorderLevel: item.reordering_min_qty,
@@ -396,31 +418,47 @@ return (
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Live Inventory Tracking</h1>
-          <div className="flex space-x-2">
-            <Button 
-              onClick={handleSyncAll} 
-              disabled={isSyncing}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Syncing...' : 'Sync All'}
-            </Button>
-            <Dialog open={showOdooSync} onOpenChange={setShowOdooSync}>
-              <DialogTrigger asChild>
-                {/* <Button variant="outline">
-                    <Database className="w-4 h-4 mr-2" />
-                    Connect Odoo
-                  </Button> */}
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Odoo Integration</DialogTitle>
-                  <DialogDescription>Sync inventory data between Odoo and your FreshBasket system</DialogDescription>
-                </DialogHeader>
-                <OdooSyncPanel />
-              </DialogContent>
-            </Dialog>
-            {/* <AddProductModal onProductAdded={refetch} /> */}
+          <div className="flex flex-col items-end space-y-2">
+            <div className="flex space-x-2">
+              <Button 
+                onClick={handleSyncAll} 
+                disabled={isSyncing}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Syncing...' : 'Sync All'}
+              </Button>
+              <Dialog open={showOdooSync} onOpenChange={setShowOdooSync}>
+                <DialogTrigger asChild>
+                  {/* <Button variant="outline">
+                      <Database className="w-4 h-4 mr-2" />
+                      Connect Odoo
+                    </Button> */}
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Odoo Integration</DialogTitle>
+                    <DialogDescription>Sync inventory data between Odoo and your FreshBasket system</DialogDescription>
+                  </DialogHeader>
+                  <OdooSyncPanel />
+                </DialogContent>
+              </Dialog>
+              {/* <AddProductModal onProductAdded={refetch} /> */}
+            </div>
+            
+            {/* Last Sync Timestamp */}
+            <div className="text-sm text-gray-500">
+              {lastSyncLoading ? (
+                <span className="flex items-center">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400 mr-2"></div>
+                  Loading sync status...
+                </span>
+              ) : lastSyncTimestamp ? (
+                <span>Last sync: {lastSyncTimestamp}</span>
+              ) : (
+                <span>No sync data available</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -550,12 +588,6 @@ return (
                 <TableHead className="font-medium text-gray-700">Barcode</TableHead>
                 <TableHead className="font-medium text-gray-700">Product</TableHead>
                 <TableHead className="font-medium text-gray-700">Category</TableHead>
-                <TableHead className="font-medium text-gray-700 text-center">BDRWH</TableHead>
-                <TableHead className="font-medium text-gray-700 text-center">MHOWH</TableHead>
-                <TableHead className="font-medium text-gray-700 text-center">SBZWH</TableHead>
-                <TableHead className="font-medium text-gray-700 text-center">CLIWH</TableHead>
-                <TableHead className="font-medium text-gray-700 text-center">BHDWH</TableHead>
-                <TableHead className="font-medium text-gray-700 text-center">ECMWH</TableHead>
                 <TableHead className="font-medium text-gray-700 text-center">Status</TableHead>
                 <TableHead className="font-medium text-gray-700 text-center">Actions</TableHead>
               </TableRow>
@@ -577,12 +609,6 @@ return (
                       {item.category}
                     </span>
                   </TableCell>
-                  <TableCell className="text-center">{item.bdrwh}</TableCell>
-                  <TableCell className="text-center">{item.mhowh}</TableCell>
-                  <TableCell className="text-center">{item.sbzwh}</TableCell>
-                  <TableCell className="text-center">{item.cliwh}</TableCell>
-                  <TableCell className="text-center">{item.bhdwh}</TableCell>
-                  <TableCell className="text-center">{item.ecmwh}</TableCell>
                   <TableCell className="text-center">
                     {item.totalStock === 0 ? (
                       <Badge variant="destructive">Out of Stock</Badge>

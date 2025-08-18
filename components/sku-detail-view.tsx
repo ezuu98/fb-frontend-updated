@@ -1,13 +1,15 @@
 "use client"
 
-import { ArrowLeft, User, Calendar } from "lucide-react"
+import { ArrowLeft, User, Calendar, Download, Search } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useAuth } from "@/hooks/use-auth"
+import { useState, useEffect, useMemo } from "react"
 import type { InventoryItem } from "@/lib/api-client"
-import { useEffect, useState, useMemo } from "react"
 import { apiClient, type StockMovement } from "@/lib/api-client"
 
 interface SkuDetailViewProps {
@@ -25,14 +27,15 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     startDate: firstDayOfMonth.toISOString().split('T')[0],
     endDate: lastDayOfMonth.toISOString().split('T')[0]
   });
-  const [stockMovementData, setStockMovementData] = useState<StockMovement[]>([]);
-  const [allStockMovements, setAllStockMovements] = useState<StockMovement[]>([]);
   const [stockMovementLoading, setStockMovementLoading] = useState(false);
   const [stockMovementError, setStockMovementError] = useState<string | null>(null);
+  const [stockMovementData, setStockMovementData] = useState<StockMovement[]>([]);
+  const [allStockMovements, setAllStockMovements] = useState<StockMovement[]>([]);
   const [openingStocks, setOpeningStocks] = useState<Record<string, number>>({});
   const [stockVarianceData, setStockVarianceData] = useState<any[]>([]);
   const [varianceBeforeDate, setVarianceBeforeDate] = useState<any[]>([]);
   const [forceUpdate, setForceUpdate] = useState(0);
+  const [filterLoading, setFilterLoading] = useState(false);
 
   // Function to calculate opening stock from movements before from date
   const calculateOpeningStockFromMovements = () => {
@@ -297,92 +300,147 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
   const totals = calculateTotals();
 
-  useEffect(() => {
-    const fetchStockMovementData = async () => {
-      if (!sku?.odoo_id == null && !sku?.id == null) {
-        console.warn("No product ID available for stock movement data");
-        return;
-      }
-
-      setStockMovementLoading(true);
-      setStockMovementError(null);
+  // Function to fetch stock movement data
+  const fetchStockMovementData = async () => {
+    console.log('fetchStockMovementData called');
+    console.log('Full sku object:', sku);
+    console.log('sku.odoo_id:', sku.odoo_id);
+    console.log('sku.id:', sku.id);
+    console.log('dateRange:', dateRange);
+    
+    // Check for either odoo_id or id
+    const productId = sku.odoo_id || sku.id;
+    
+    if (!productId) {
+      console.warn('Missing both sku.odoo_id and sku.id');
+      console.warn('Available sku properties:', Object.keys(sku));
+      setStockMovementError('Missing product ID. Please try again.');
+      return;
+    }
+    
+    console.log('Using productId:', productId);
+    
+    setStockMovementLoading(true);
+    setStockMovementError(null);
+    
+    try {
+      const productIdString = productId.toString();
+      console.log('Using productIdString:', productIdString);
+      
+      // Fetch all movements for opening stock calculation
       try {
-        const productId = sku.odoo_id?.toString() || sku.id?.toString() || "";
-        
-        // Fetch all movements for opening stock calculation
-        try {
-          const allMovementsResponse = await apiClient.getAllStockMovements(productId);
-          if (allMovementsResponse.success) {
-            setAllStockMovements(allMovementsResponse.data);
+        console.log('Fetching all movements...');
+        const allMovementsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-movements/all/${productIdString}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json'
           }
-        } catch (allMovementsErr) {
-          console.error('Error fetching all movements:', allMovementsErr);
+        });
+        const allMovementsData = await allMovementsResponse.json();
+        console.log('All movements response:', allMovementsData);
+        if (allMovementsData.success) {
+          setAllStockMovements(allMovementsData.data);
+        } else {
           setAllStockMovements([]);
         }
+      } catch (allMovementsErr) {
+        console.error('Error fetching all movements:', allMovementsErr);
+        setAllStockMovements([]);
+      }
 
-        // Fetch variance data before the start date for opening stock calculation
+      // Fetch variance data before the start date for opening stock calculation
+      try {
+        console.log('Fetching variance before date...');
+        const varianceBeforeResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-before-date/${productIdString}?date=${dateRange.startDate}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const varianceBeforeData = await varianceBeforeResponse.json();
+        console.log('Variance before date response:', varianceBeforeData);
+        if (varianceBeforeData.success) {
+          setVarianceBeforeDate(varianceBeforeData.data);
+        } else {
+          setVarianceBeforeDate([]);
+        }
+      } catch (varianceBeforeErr) {
+        console.error('Error fetching variance before date:', varianceBeforeErr);
+        setVarianceBeforeDate([]);
+      }
+      
+      // Use date range API for filtered movements
+      console.log('Date range being sent:', { startDate: dateRange.startDate, endDate: dateRange.endDate });
+      
+      console.log('Fetching stock movement details by date range...');
+      const {success, data, opening_stocks} = await apiClient.getStockMovementDetailsByDateRange(
+        productIdString,
+        dateRange.startDate,
+        dateRange.endDate
+      );
+      console.log('Stock movement details response:', { success, data, opening_stocks });
+      
+      if (success) {
+        setStockMovementData(data);
+        setOpeningStocks(opening_stocks || {});
+        
+        // Fetch stock variance data for the date range
         try {
-          const varianceBeforeResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-before-date/${productId}?date=${dateRange.startDate}`, {
+          console.log('Fetching variance with totals...');
+          const varianceResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-with-totals/${productIdString}?start_date=${dateRange.startDate}&end_date=${dateRange.endDate}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
               'Content-Type': 'application/json'
             }
           });
-          const varianceBeforeData = await varianceBeforeResponse.json();
-          if (varianceBeforeData.success) {
-            setVarianceBeforeDate(varianceBeforeData.data);
+          const varianceData = await varianceResponse.json();
+          console.log('Variance with totals response:', varianceData);
+          if (varianceData.success) {
+            setStockVarianceData(varianceData.data);
           } else {
-            setVarianceBeforeDate([]);
-          }
-        } catch (varianceBeforeErr) {
-          console.error('Error fetching variance before date:', varianceBeforeErr);
-          setVarianceBeforeDate([]);
-        }
-        
-        // Use date range API for filtered movements
-        console.log('Date range being sent:', { startDate: dateRange.startDate, endDate: dateRange.endDate });
-        
-        const {success, data, opening_stocks} = await apiClient.getStockMovementDetailsByDateRange(
-          productId,
-          dateRange.startDate,
-          dateRange.endDate
-        );
-        console.log(success)
-        console.log(data)
-        console.log(opening_stocks)
-        
-        if (success) {
-          setStockMovementData(data);
-          setOpeningStocks(opening_stocks || {});
-          
-          // Fetch stock variance data for the date range
-          try {
-            const varianceResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-with-totals/${productId}?start_date=${dateRange.startDate}&end_date=${dateRange.endDate}`, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            const varianceData = await varianceResponse.json();
-            if (varianceData.success) {
-              setStockVarianceData(varianceData.data);
-            } else {
-              setStockVarianceData([]);
-            }
-          } catch (varianceErr) {
             setStockVarianceData([]);
           }
+        } catch (varianceErr) {
+          console.error('Error fetching variance with totals:', varianceErr);
+          setStockVarianceData([]);
         }
-      } catch (err: any) {
-        setStockMovementError(err.message || "Failed to fetch stock movement data");
-        console.error("Stock movement data error:", err);
-      } finally {
-        setStockMovementLoading(false);
+      } else {
+        console.error('Failed to fetch stock movement details');
       }
-    };
+    } catch (err: any) {
+      console.error('Error in fetchStockMovementData:', err);
+      setStockMovementError(err.message || "Failed to fetch stock movement data");
+    } finally {
+      setStockMovementLoading(false);
+    }
+  };
 
-    fetchStockMovementData();
-  }, [sku.odoo_id, sku.id, dateRange.startDate, dateRange.endDate]);
+  // Function to apply filter (triggered by Filter button)
+  const applyFilter = async () => {
+    console.log('Filter button clicked');
+    console.log('Current date range:', dateRange);
+    
+    setFilterLoading(true);
+    setStockMovementError(null);
+    
+    try {
+      await fetchStockMovementData();
+      console.log('Filter applied successfully');
+    } catch (error) {
+      console.error('Error applying filter:', error);
+      setStockMovementError('Failed to apply filter. Please try again.');
+    } finally {
+      setFilterLoading(false);
+    }
+  };
+
+  // Initial data fetch on component mount
+  useEffect(() => {
+    const productId = sku.odoo_id || sku.id;
+    if (productId) {
+      fetchStockMovementData();
+    }
+  }, [sku.odoo_id, sku.id]);
 
   useEffect(() => { 
     // Force a re-calculation by updating a dummy state if needed
@@ -396,6 +454,95 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   useEffect(() => {
   }, [openingStocks]);
 
+  const exportWarehouseData = () => {
+    const headers = [
+      "Warehouse",
+      "Opening Stock",
+      "Purchases", 
+      "Purchase Returns",
+      "Sales",
+      "Sales Returns",
+      "Wastages",
+      "Transfer IN",
+      "Transfer OUT",
+      "Manufacturing",
+      "Consumption",
+      "Stock Variance",
+      "Closing Stock"
+    ];
+
+    const csvData = warehouseData.map(row => {
+      const movements = getWarehouseMovements(row.warehouseCode);
+      const closingStock = 
+        row.openingStock
+        + movements.purchases
+        + movements.transfer_in
+        + movements.manufacturing
+        + movements.sales_returns
+        - Math.abs(movements.sales)
+        - Math.abs(movements.purchase_returns)
+        - Math.abs(movements.transfer_out)
+        - Math.abs(movements.wastages)
+        - Math.abs(movements.consumption)
+      ;
+
+      // Get variance data for this warehouse
+      const warehouseVariance = stockVarianceData.find(
+        v => v.warehouse_code === row.warehouseCode
+      );
+      const stockVariance = warehouseVariance?.stock_variance || 0;
+      const closingStockWithVariance = closingStock + stockVariance;
+
+      return [
+        row.warehouse,
+        row.openingStock,
+        movements.purchases,
+        movements.purchase_returns,
+        movements.sales,
+        movements.sales_returns,
+        movements.wastages,
+        movements.transfer_in,
+        movements.transfer_out,
+        movements.manufacturing,
+        movements.consumption,
+        stockVariance > 0 ? '+' + stockVariance : stockVariance,
+        closingStockWithVariance
+      ];
+    });
+
+    // Add totals row
+    const totalsRow = [
+      "Total",
+      totals.totalOpeningStock.toFixed(2),
+      totals.totalPurchases.toFixed(2),
+      totals.totalPurchaseReturns.toFixed(2),
+      totals.totalSales.toFixed(2),
+      totals.totalSalesReturns.toFixed(2),
+      totals.totalWastages.toFixed(2),
+      totals.totalTransferIN.toFixed(2),
+      totals.totalTransferOUT.toFixed(2),
+      totals.totalManufacturing.toFixed(2),
+      totals.totalConsumption.toFixed(2),
+      stockVarianceData.filter(v => !v.is_total).reduce((sum, v) => sum + v.stock_variance, 0),
+      totals.totalClosingStock + stockVarianceData.filter(v => !v.is_total).reduce((sum, v) => sum + v.stock_variance, 0)
+    ];
+
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map(row => row.join(",")),
+      totalsRow.join(",")
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Warehouse_Inventory_${sku.name}_${dateRange.startDate}_to_${dateRange.endDate}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
   
   return (
     <div className="min-h-screen bg-gray-50">
@@ -516,7 +663,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Warehouse Inventory</h2>
 
-              {/* Date Range Filters */}
+              {/* Date Range Filters and Export */}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
@@ -545,21 +692,64 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                   />
                 </div>
 
+                {/* Filter Button */}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
+                  onClick={applyFilter}
+                  disabled={filterLoading}
+                  className="text-xs bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {filterLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                      Filtering...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-3 h-3 mr-1" />
+                      Filter
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
                     const today = new Date();
                     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
                     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-                    setDateRange({
+                    const newDateRange = {
                       startDate: firstDay.toISOString().split('T')[0],
                       endDate: lastDay.toISOString().split('T')[0]
-                    });
+                    };
+                    setDateRange(newDateRange);
+                    // Trigger API call immediately for Current Month
+                    setFilterLoading(true);
+                    const originalDateRange = dateRange;
+                    setDateRange(newDateRange);
+                    // Use setTimeout to ensure state is updated before API call
+                    setTimeout(async () => {
+                      await fetchStockMovementData();
+                      setFilterLoading(false);
+                    }, 0);
                   }}
+                  disabled={filterLoading}
                   className="text-xs"
                 >
                   Current Month
+                </Button>
+
+                {/* Export Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportWarehouseData()}
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  Export
                 </Button>
               </div>
             </div>
