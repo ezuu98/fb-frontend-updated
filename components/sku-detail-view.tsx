@@ -23,6 +23,7 @@ const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
 export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
+  console.log(sku)
   const [dateRange, setDateRange] = useState({
     startDate: firstDayOfMonth.toISOString().split('T')[0],
     endDate: lastDayOfMonth.toISOString().split('T')[0]
@@ -37,89 +38,17 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const [forceUpdate, setForceUpdate] = useState(0);
   const [filterLoading, setFilterLoading] = useState(false);
 
-  // Function to calculate opening stock from movements before from date
+  // Function to calculate opening stock from warehouse_inventory
   const calculateOpeningStockFromMovements = () => {
-    if (!allStockMovements.length) return {};
-    
-    // Calculate cutoff date (one day before start date)
-    const cutoffDate = new Date(dateRange.startDate);
-    cutoffDate.setDate(cutoffDate.getDate() - 1);
-    
-    // Initialize opening stocks with base values from warehouse_inventory
+    // Initialize opening stocks directly from warehouse_inventory
     const openingStocks: Record<string, number> = {};
-    
-    // Set base opening stocks from warehouse_inventory
+
+    // Set opening stocks from sku.warehouse_inventory quantities
     sku.warehouse_inventory?.forEach((wh) => {
-      const code = wh.warehouse?.code || "";
-      openingStocks[code] = wh.quantity || 0;
+      const code = wh.warehouse?.code || `unknown_${Math.random()}`; // Fallback for missing code
+      openingStocks[code] = wh.quantity || 0; // Use the quantity field directly
     });
-    
-    // Process movements before the cutoff date
-    allStockMovements.forEach((movement) => {
-      // Only consider movements before the cutoff date
-      if (new Date(movement.created_at) >= cutoffDate) return;
-      
-      const sourceWarehouse = movement.warehouse?.code;
-      const destWarehouse = movement.warehouse_dest?.code;
-      
-      // If this warehouse is the source (outgoing movements)
-      if (sourceWarehouse) {
-        if (!openingStocks[sourceWarehouse]) {
-          openingStocks[sourceWarehouse] = 0;
-        }
-        
-        switch (movement.movement_type) {
-          case 'sales':
-            openingStocks[sourceWarehouse] -= Math.abs(movement.quantity);
-            break;
-          case 'purchase_return':
-            openingStocks[sourceWarehouse] -= Math.abs(movement.quantity);
-            break;
-          case 'transfer_out':
-            openingStocks[sourceWarehouse] -= Math.abs(movement.quantity);
-            break;
-          case 'wastages':
-            openingStocks[sourceWarehouse] -= Math.abs(movement.quantity);
-            break;
-          case 'consumption':
-            openingStocks[sourceWarehouse] -= Math.abs(movement.quantity);
-            break;
-        }
-      }
-      
-      // If this warehouse is the destination (incoming movements)
-      if (destWarehouse) {
-        if (!openingStocks[destWarehouse]) {
-          openingStocks[destWarehouse] = 0;
-        }
-        
-        switch (movement.movement_type) {
-          case 'purchase':
-            openingStocks[destWarehouse] += movement.quantity;
-            break;
-          case 'transfer_in':
-            openingStocks[destWarehouse] += movement.quantity;
-            break;
-          case 'manufacturing':
-            openingStocks[destWarehouse] += movement.quantity;
-            break;
-          case 'sales_returns':
-            openingStocks[destWarehouse] += movement.quantity;
-            break;
-        }
-      }
-    });
-    
-    // Add variance adjustments from stock corrections before the start date
-    if (varianceBeforeDate.length > 0) {
-      varianceBeforeDate.forEach((variance) => {
-        const warehouseCode = variance.warehouse_code;
-        if (warehouseCode && openingStocks[warehouseCode] !== undefined) {
-          openingStocks[warehouseCode] += variance.stock_variance;
-        }
-      });
-    }
-    
+
     return openingStocks;
   };
 
@@ -129,29 +58,29 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     
     // Add warehouses from inventory data
     sku.warehouse_inventory?.forEach((wh) => {
-      const code = wh.warehouse?.code || "";
+      const code = wh.warehouse?.code || `unknown_${Math.random()}`; // Fallback for missing code
       const name = wh.warehouse?.name || wh.warehouse?.code || "Unknown";
       const warehouseId = wh.warehouse?.id;
       warehouses.set(code, {
         warehouse: name,
         warehouseCode: code,
         warehouseId: warehouseId,
-        openingStock: calculatedOpeningStocks[code] || 0,
+        openingStock: calculatedOpeningStocks[code] || 0, // Use calculated opening stock
         lastUpdated: "N/A",
       });
     });
     
+    // Add warehouses from stock movement data (if not already present)
     stockMovementData?.forEach((movement) => {
       const sourceWarehouse = movement.warehouse?.code;
       const destWarehouse = movement.warehouse_dest?.code;
-      
       
       if (sourceWarehouse && !warehouses.has(sourceWarehouse)) {
         warehouses.set(sourceWarehouse, {
           warehouse: movement.warehouse?.name || sourceWarehouse,
           warehouseCode: sourceWarehouse,
-          warehouseId: movement.warehouse?.id, // Add warehouse ID if available
-          openingStock: calculatedOpeningStocks[sourceWarehouse] || 0,
+          warehouseId: movement.warehouse?.id,
+          openingStock: calculatedOpeningStocks[sourceWarehouse] || 0, // Use calculated opening stock
           calculatedStock: 0,
           lastUpdated: "N/A",
         });
@@ -161,21 +90,19 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         warehouses.set(destWarehouse, {
           warehouse: movement.warehouse_dest?.name || destWarehouse,
           warehouseCode: destWarehouse,
-          warehouseId: movement.warehouse_dest?.id, // Add warehouse ID if available
-          openingStock: calculatedOpeningStocks[destWarehouse] || 0,
+          warehouseId: movement.warehouse_dest?.id,
+          openingStock: calculatedOpeningStocks[destWarehouse] || 0, // Use calculated opening stock
           calculatedStock: 0,
           lastUpdated: "N/A",
         });
       }
     });
     
-    const result = Array.from(warehouses.values());
-    return result;
-  }, [sku.warehouse_inventory, stockMovementData, allStockMovements, dateRange.startDate, forceUpdate]);
+    return Array.from(warehouses.values());
+  }, [sku.warehouse_inventory, stockMovementData, forceUpdate]); // Removed allStockMovements and dateRange.startDate from dependencies
 
   // Enhanced function to get stock movement data for a warehouse
   const getWarehouseMovements = (warehouseCode: string) => {
-    // Process stock movement data to aggregate by warehouse
     const warehouseMovements = stockMovementData.reduce((acc, movement) => {
       const sourceWarehouse = movement.warehouse?.code;
       const destWarehouse = movement.warehouse_dest?.code;
@@ -183,7 +110,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       if (sourceWarehouse === warehouseCode) {
         switch (movement.movement_type) {
           case 'purchase':
-            acc.sales += Math.abs(movement.quantity);
+            acc.purchases += Math.abs(movement.quantity);
             break;
           case 'sales':
             acc.sales += Math.abs(movement.quantity);
@@ -207,7 +134,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       }
       
       if (destWarehouse === warehouseCode) {
-        // This warehouse is the destination
         switch (movement.movement_type) {
           case 'purchase':
             acc.purchases += movement.quantity;
@@ -252,23 +178,20 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     let totalConsumption = 0;
     let totalClosingStock = 0;
 
-
     warehouseData.forEach((row) => {
       const movements = getWarehouseMovements(row.warehouseCode);
 
       totalOpeningStock += row.openingStock;
       totalPurchases += movements.purchases;
       totalPurchaseReturns += Math.abs(movements.purchase_returns);
-      totalSales += Math.abs(movements.sales);
+      totalSales += movements.sales;
       totalSalesReturns += movements.sales_returns;
-      totalWastages += Math.abs(movements.wastages);
+      totalWastages += movements.wastages;
       totalTransferIN += movements.transfer_in;
-      totalTransferOUT += Math.abs(movements.transfer_out);
+      totalTransferOUT += movements.transfer_out;
       totalManufacturing += movements.manufacturing;
       totalConsumption += movements.consumption;
 
-      // Calculate closing stock: 
-      // opening + purchases + transfer_in + manufacturing - sales - purchase_returns - transfer_out - wastages
       const closingStock = row.openingStock
         + movements.purchases
         + movements.transfer_in
@@ -280,7 +203,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         - Math.abs(movements.wastages)
         - Math.abs(movements.consumption);
 
-      totalClosingStock += closingStock; // Ensure no negative stock
+      totalClosingStock += closingStock;
     });
 
     return {
@@ -301,14 +224,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const totals = calculateTotals();
 
   // Function to fetch stock movement data
-  const fetchStockMovementData = async () => {
-    console.log('fetchStockMovementData called');
-    console.log('Full sku object:', sku);
-    console.log('sku.odoo_id:', sku.odoo_id);
-    console.log('sku.id:', sku.id);
-    console.log('dateRange:', dateRange);
-    
-    // Check for either odoo_id or id
+  const fetchStockMovementData = async () => { 
     const productId = sku.odoo_id || sku.id;
     
     if (!productId) {
@@ -318,75 +234,23 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       return;
     }
     
-    console.log('Using productId:', productId);
-    
     setStockMovementLoading(true);
     setStockMovementError(null);
     
     try {
       const productIdString = productId.toString();
-      console.log('Using productIdString:', productIdString);
       
-      // Fetch all movements for opening stock calculation
-      try {
-        console.log('Fetching all movements...');
-        const allMovementsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-movements/all/${productIdString}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const allMovementsData = await allMovementsResponse.json();
-        console.log('All movements response:', allMovementsData);
-        if (allMovementsData.success) {
-          setAllStockMovements(allMovementsData.data);
-        } else {
-          setAllStockMovements([]);
-        }
-      } catch (allMovementsErr) {
-        console.error('Error fetching all movements:', allMovementsErr);
-        setAllStockMovements([]);
-      }
-
-      // Fetch variance data before the start date for opening stock calculation
-      try {
-        console.log('Fetching variance before date...');
-        const varianceBeforeResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-before-date/${productIdString}?date=${dateRange.startDate}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const varianceBeforeData = await varianceBeforeResponse.json();
-        console.log('Variance before date response:', varianceBeforeData);
-        if (varianceBeforeData.success) {
-          setVarianceBeforeDate(varianceBeforeData.data);
-        } else {
-          setVarianceBeforeDate([]);
-        }
-      } catch (varianceBeforeErr) {
-        console.error('Error fetching variance before date:', varianceBeforeErr);
-        setVarianceBeforeDate([]);
-      }
-      
-      // Use date range API for filtered movements
-      console.log('Date range being sent:', { startDate: dateRange.startDate, endDate: dateRange.endDate });
-      
-      console.log('Fetching stock movement details by date range...');
       const {success, data, opening_stocks} = await apiClient.getStockMovementDetailsByDateRange(
         productIdString,
         dateRange.startDate,
         dateRange.endDate
       );
-      console.log('Stock movement details response:', { success, data, opening_stocks });
       
       if (success) {
         setStockMovementData(data);
         setOpeningStocks(opening_stocks || {});
         
-        // Fetch stock variance data for the date range
         try {
-          console.log('Fetching variance with totals...');
           const varianceResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-with-totals/${productIdString}?start_date=${dateRange.startDate}&end_date=${dateRange.endDate}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
@@ -394,7 +258,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             }
           });
           const varianceData = await varianceResponse.json();
-          console.log('Variance with totals response:', varianceData);
           if (varianceData.success) {
             setStockVarianceData(varianceData.data);
           } else {
@@ -415,17 +278,13 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     }
   };
 
-  // Function to apply filter (triggered by Filter button)
+  // Function to apply filter
   const applyFilter = async () => {
-    console.log('Filter button clicked');
-    console.log('Current date range:', dateRange);
-    
     setFilterLoading(true);
     setStockMovementError(null);
     
     try {
       await fetchStockMovementData();
-      console.log('Filter applied successfully');
     } catch (error) {
       console.error('Error applying filter:', error);
       setStockMovementError('Failed to apply filter. Please try again.');
@@ -443,14 +302,9 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   }, [sku.odoo_id, sku.id]);
 
   useEffect(() => { 
-    // Force a re-calculation by updating a dummy state if needed
     setForceUpdate(prev => prev + 1);
   }, [stockMovementData]);
   
-  // Monitor state changes
-  useEffect(() => {
-  }, [stockMovementData]);
-
   useEffect(() => {
   }, [openingStocks]);
 
@@ -483,10 +337,8 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         - Math.abs(movements.purchase_returns)
         - Math.abs(movements.transfer_out)
         - Math.abs(movements.wastages)
-        - Math.abs(movements.consumption)
-      ;
+        - Math.abs(movements.consumption);
 
-      // Get variance data for this warehouse
       const warehouseVariance = stockVarianceData.find(
         v => v.warehouse_code === row.warehouseCode
       );
@@ -510,7 +362,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       ];
     });
 
-    // Add totals row
     const totalsRow = [
       "Total",
       totals.totalOpeningStock.toFixed(2),
@@ -546,7 +397,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-8">
@@ -566,10 +416,8 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="px-6 py-8">
         <div className="max-w-7xl mx-auto">
-          {/* Breadcrumb */}
           <div className="flex items-center space-x-2 text-sm text-gray-600 mb-6">
             <button onClick={onBack} className="flex items-center hover:text-gray-900">
               <ArrowLeft className="w-4 h-4 mr-1" />
@@ -579,7 +427,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             <span className="text-gray-900">SKU Details</span>
           </div>
 
-          {/* SKU Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">SKU: {sku.name}</h1>
             <div className="flex items-center space-x-4 text-sm text-gray-600">
@@ -592,7 +439,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             <p className="text-gray-600 mt-2">Real-time inventory levels across all warehouse locations</p>
           </div>
 
-          {/* Product Details */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Product Information</h3>
@@ -645,7 +491,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             </div>
           </div>
 
-          {/* Loading/Error States */}
           {stockMovementLoading && (
             <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-blue-800">Loading stock movement data...</p>
@@ -658,12 +503,9 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             </div>
           )}
 
-          {/* Warehouse Inventory Table */}
           <div className="mt-12 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Warehouse Inventory</h2>
-
-              {/* Date Range Filters and Export */}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
@@ -692,7 +534,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                   />
                 </div>
 
-                {/* Filter Button */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -725,11 +566,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                       endDate: lastDay.toISOString().split('T')[0]
                     };
                     setDateRange(newDateRange);
-                    // Trigger API call immediately for Current Month
                     setFilterLoading(true);
-                    const originalDateRange = dateRange;
-                    setDateRange(newDateRange);
-                    // Use setTimeout to ensure state is updated before API call
                     setTimeout(async () => {
                       await fetchStockMovementData();
                       setFilterLoading(false);
@@ -741,7 +578,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                   Current Month
                 </Button>
 
-                {/* Export Button */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -778,7 +614,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                     <>
                       {warehouseData.map((row, index) => {
                         const movements = getWarehouseMovements(row.warehouseCode);
-
                         const closingStock = 
                           row.openingStock
                           + movements.purchases
@@ -789,10 +624,8 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                           - Math.abs(movements.purchase_returns)
                           - Math.abs(movements.transfer_out)
                           - Math.abs(movements.wastages)
-                          - Math.abs(movements.consumption)
-                        ;
+                          - Math.abs(movements.consumption);
 
-                        // Get variance data for this warehouse
                         const warehouseVariance = stockVarianceData.find(
                           v => v.warehouse_code === row.warehouseCode
                         );
@@ -836,7 +669,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                           </TableRow>
                         );
                       })}
-                      {/* Total Row */}
                       <TableRow className="bg-gray-50 border-t-2 border-gray-200">
                         <TableCell className="font-bold">Total</TableCell>
                         <TableCell className="text-center font-bold text-blue-600">{totals.totalOpeningStock.toFixed(2)}</TableCell>
@@ -881,7 +713,6 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-16">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex justify-center space-x-8 mb-4">
