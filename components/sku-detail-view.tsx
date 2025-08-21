@@ -32,21 +32,97 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const [stockMovementError, setStockMovementError] = useState<string | null>(null);
   const [stockMovementData, setStockMovementData] = useState<StockMovement[]>([]);
   const [allStockMovements, setAllStockMovements] = useState<StockMovement[]>([]);
+  const [historicalMovements, setHistoricalMovements] = useState<StockMovement[]>([]);
   const [openingStocks, setOpeningStocks] = useState<Record<string, number>>({});
   const [stockVarianceData, setStockVarianceData] = useState<any[]>([]);
   const [varianceBeforeDate, setVarianceBeforeDate] = useState<any[]>([]);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [filterLoading, setFilterLoading] = useState(false);
 
-  // Function to calculate opening stock from warehouse_inventory
-  const calculateOpeningStockFromMovements = () => {
-    // Initialize opening stocks directly from warehouse_inventory
-    const openingStocks: Record<string, number> = {};
+  // Normalize movement types to a single canonical set
+  const normalizeMovementType = (type?: string) => {
+    switch ((type || '').toLowerCase()) {
+      case 'sale':
+        return 'sales';
+      case 'purchase_return':
+        return 'purchase_returns';
+      case 'wastage':
+        return 'wastages';
+      case 'manufacturing_in':
+        return 'manufacturing';
+      case 'manufacturing_out':
+        return 'consumption';
+      default:
+        return (type || '').toLowerCase();
+    }
+  };
 
-    // Set opening stocks from sku.warehouse_inventory quantities
+  // Function to calculate dynamic opening stock: base inventory + historical movements before start date
+  const calculateDynamicOpeningStock = () => {
+    // Seed with base inventory quantities per warehouse
+    const openingStocks: Record<string, number> = {};
     sku.warehouse_inventory?.forEach((wh) => {
-      const code = wh.warehouse?.code || `unknown_${Math.random()}`; // Fallback for missing code
-      openingStocks[code] = wh.quantity || 0; // Use the quantity field directly
+      const code = wh.warehouse?.code || `unknown_${Math.random()}`;
+      openingStocks[code] = (wh.quantity || 0);
+    });
+
+    // Sum natural-signed historical movements before start date
+    historicalMovements.forEach((movement) => {
+      const type = normalizeMovementType(movement.movement_type);
+      const sourceWarehouse = movement.warehouse?.code;
+      const destWarehouse = movement.warehouse_dest?.code;
+      const quantity = Math.abs(movement.quantity || 0);
+
+      // Ensure keys exist
+      if (sourceWarehouse && openingStocks[sourceWarehouse] === undefined) openingStocks[sourceWarehouse] = 0;
+      if (destWarehouse && openingStocks[destWarehouse] === undefined) openingStocks[destWarehouse] = 0;
+
+      // Apply natural-signed effects to source warehouse
+      if (sourceWarehouse) {
+        if (
+          type === 'sales' ||
+          type === 'transfer_out' ||
+          type === 'wastages' ||
+          type === 'consumption' ||
+          type === 'purchase_returns'
+        ) {
+          openingStocks[sourceWarehouse] -= quantity;
+        } else if (
+          type === 'purchase' ||
+          type === 'transfer_in' ||
+          type === 'manufacturing' ||
+          type === 'sales_returns' ||
+          type === 'adjustment'
+        ) {
+          openingStocks[sourceWarehouse] += quantity;
+        }
+      }
+
+      // Apply natural-signed effects to destination warehouse
+      if (destWarehouse) {
+        if (
+          type === 'purchase' ||
+          type === 'transfer_in' ||
+          type === 'manufacturing' ||
+          type === 'sales_returns' ||
+          type === 'adjustment'
+        ) {
+          openingStocks[destWarehouse] += quantity;
+        } else if (
+          type === 'sales' ||
+          type === 'transfer_out' ||
+          type === 'wastages' ||
+          type === 'consumption' ||
+          type === 'purchase_returns'
+        ) {
+          openingStocks[destWarehouse] -= quantity;
+        }
+      }
+    });
+
+    // Clamp negatives to zero for display friendliness
+    Object.keys(openingStocks).forEach((code) => {
+      if (openingStocks[code] < 0) openingStocks[code] = 0;
     });
 
     return openingStocks;
@@ -54,7 +130,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
   const warehouseData = useMemo(() => {
     const warehouses = new Map();
-    const calculatedOpeningStocks = calculateOpeningStockFromMovements();
+    const calculatedOpeningStocks = calculateDynamicOpeningStock();
     
     // Add warehouses from inventory data
     sku.warehouse_inventory?.forEach((wh) => {
@@ -99,7 +175,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     });
     
     return Array.from(warehouses.values());
-  }, [sku.warehouse_inventory, stockMovementData, forceUpdate]); // Removed allStockMovements and dateRange.startDate from dependencies
+  }, [sku.warehouse_inventory, stockMovementData, historicalMovements, forceUpdate]);
 
   // Enhanced function to get stock movement data for a warehouse
   const getWarehouseMovements = (warehouseCode: string) => {
@@ -223,6 +299,36 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
 
   const totals = calculateTotals();
 
+  // Function to fetch historical movements for opening stock calculation
+  const fetchHistoricalMovements = async () => {
+    const productId = sku.odoo_id || sku.id;
+    
+    if (!productId) {
+      console.warn('Missing both sku.odoo_id and sku.id for historical movements');
+      return;
+    }
+    
+    try {
+      const productIdString = productId.toString();
+      
+      const { success, data } = await apiClient.getAllStockMovementsBeforeDate(
+        productIdString,
+        dateRange.startDate
+      );
+      
+      if (success) {
+        setHistoricalMovements(data);
+        console.log(`Fetched ${data.length} historical movements before ${dateRange.startDate}`);
+      } else {
+        console.error('Failed to fetch historical movements');
+        setHistoricalMovements([]);
+      }
+    } catch (err: any) {
+      console.error('Error fetching historical movements:', err);
+      setHistoricalMovements([]);
+    }
+  };
+
   // Function to fetch stock movement data
   const fetchStockMovementData = async () => { 
     const productId = sku.odoo_id || sku.id;
@@ -239,6 +345,9 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     
     try {
       const productIdString = productId.toString();
+      
+      // Fetch historical movements for opening stock calculation
+      await fetchHistoricalMovements();
       
       const {success, data, opening_stocks} = await apiClient.getStockMovementDetailsByDateRange(
         productIdString,
@@ -284,6 +393,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     setStockMovementError(null);
     
     try {
+      // Fetch both historical movements and current date range movements
       await fetchStockMovementData();
     } catch (error) {
       console.error('Error applying filter:', error);
@@ -293,7 +403,7 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     }
   };
 
-  // Initial data fetch on component mount
+  // Initial data fetch on component mount only
   useEffect(() => {
     const productId = sku.odoo_id || sku.id;
     if (productId) {

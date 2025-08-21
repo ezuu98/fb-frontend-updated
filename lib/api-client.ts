@@ -250,6 +250,19 @@ class ApiClient {
     throw new Error(response.error || 'Failed to get all stock movements');
   }
 
+  async getAllStockMovementsBeforeDate(productId: string, beforeDate: string): Promise<{ success: boolean; data: StockMovement[] }> {
+    const response = await this.request<StockMovement[]>(
+      `/inventory/stock-movements/before-date/${productId}?before_date=${beforeDate}`
+    );
+    if (response.success && response.data) {
+      return { 
+        success: true, 
+        data: response.data || []
+      };
+    }
+    throw new Error(response.error || 'Failed to get stock movements before date');
+  }
+
   // Sync methods
   async syncPurchases(): Promise<{ success: boolean; count: number }> {
     const response = await this.request<{ success: boolean; count: number }>('/sync/purchases', {
