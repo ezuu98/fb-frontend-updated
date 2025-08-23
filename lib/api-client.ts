@@ -294,8 +294,9 @@ class ApiClient {
     throw new Error(response.error || 'Failed to sync products');
   }
 
-  async syncAll(): Promise<{ success: boolean; count: number }> {
-    const response = await this.request<{ success: boolean; count: number }>('/sync/all', {
+  async syncAll(since?: string): Promise<{ success: boolean; count: number }> {
+    const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+    const response = await this.request<{ success: boolean; count: number }>(`/sync/all${qs}`, {
       method: 'POST',
     });
     if (response.success && response.data) {

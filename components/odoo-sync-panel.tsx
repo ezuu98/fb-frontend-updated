@@ -9,6 +9,7 @@ export function OdooSyncPanel() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [message, setMessage] = useState("")
+  const [since, setSince] = useState<string>("")
 
   const handleTestConnection = async () => {
     setIsTesting(true)
@@ -27,7 +28,8 @@ export function OdooSyncPanel() {
   const handleSync = async () => {
     setIsSyncing(true)
     try {
-      const result = await apiClient.syncAll()
+      const isoSince = since ? new Date(since).toISOString() : undefined
+      const result = await apiClient.syncAll(isoSince)
       setMessage(`✅ Sync completed! ${result.count} records processed`)
     } catch (err: any) {
       console.error("Sync failed:", err)
@@ -39,7 +41,16 @@ export function OdooSyncPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex space-x-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:space-x-4 space-y-3 sm:space-y-0">
+        <div className="flex flex-col">
+          <label className="text-sm font-medium mb-1">Start date (optional)</label>
+          <input
+            type="datetime-local"
+            value={since}
+            onChange={(e) => setSince(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
+        </div>
         <Button onClick={handleTestConnection} disabled={isTesting}>
           {isTesting ? (
             <>

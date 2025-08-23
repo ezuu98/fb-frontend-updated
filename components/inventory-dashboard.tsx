@@ -49,6 +49,7 @@ export function InventoryDashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<string | null>(null);
   const [lastSyncLoading, setLastSyncLoading] = useState(true);
+  const [syncSince, setSyncSince] = useState<string>("");
   
   const itemsPerPage = 30
 
@@ -139,7 +140,8 @@ export function InventoryDashboard() {
     setIsSyncing(true);
     try {
       // Call the sync API endpoint
-      const response = await fetch(process.env.NEXT_PUBLIC_API_URL+'/sync/all', {
+      const sinceParam = syncSince ? `?since=${encodeURIComponent(new Date(syncSince).toISOString())}` : '';
+      const response = await fetch(process.env.NEXT_PUBLIC_API_URL+'/sync/all'+sinceParam, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -419,7 +421,16 @@ return (
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Live Inventory Tracking</h1>
           <div className="flex flex-col items-end space-y-2">
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 items-end">
+              <div className="flex flex-col">
+                <label className="text-sm font-medium mb-1">Start date (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={syncSince}
+                  onChange={(e) => setSyncSince(e.target.value)}
+                  className="border rounded px-2 py-1 text-sm"
+                />
+              </div>
               <Button 
                 onClick={handleSyncAll} 
                 disabled={isSyncing}
