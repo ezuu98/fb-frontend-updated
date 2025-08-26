@@ -2,9 +2,14 @@ import { Server } from "socket.io"
 import { logger } from "../utils/logger.js"
 
 export function setupWebSocket(server) {
+  // Read allowed origins from env (comma separated)
+  const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000")
+    .split(",")
+    .map(origin => origin.trim())
+
   const io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      origin: allowedOrigins,
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -28,7 +33,6 @@ export function setupWebSocket(server) {
     // Handle stock movement updates
     socket.on("stock-movement", (data) => {
       logger.info("Stock movement received:", data)
-      // Broadcast to all clients in inventory room
       socket.to("inventory").emit("stock-updated", data)
       socket.to("dashboard").emit("stats-updated", data)
     })
@@ -57,20 +61,18 @@ export function setupWebSocket(server) {
       io.to("inventory").emit("stock-updated", data)
       io.to("dashboard").emit("stats-updated", data)
     },
-
     inventoryUpdate: (data) => {
       io.to("inventory").emit("inventory-changed", data)
       io.to("dashboard").emit("stats-updated", data)
     },
-
     lowStockAlert: (data) => {
       io.to("inventory").emit("low-stock-alert", data)
       io.to("dashboard").emit("low-stock-alert", data)
     },
-
     systemNotification: (data) => {
       io.emit("system-notification", data)
     },
   }
+
   return { io, broadcast }
 }
