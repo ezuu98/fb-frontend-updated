@@ -1,24 +1,17 @@
-"use client"
-
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import Link from "next/link";
 
 export default function FreshBasketHeader() {
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between">
+    <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/80 backdrop-blur">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
+        <Link href="/" className="inline-flex items-center gap-2">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-gray-900 text-white">■</span>
+          <span className="text-base font-semibold tracking-tight">FreshBasket</span>
+        </Link>
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-md bg-green-600 text-white flex items-center justify-center font-bold">FB</div>
-          <Link href="/" className="text-xl font-semibold tracking-tight text-gray-900">
-            Fresh Basket
-          </Link>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/">Dashboard</Link>
-          </Button>
+          <span className="h-2.5 w-2.5 rounded-full bg-gray-300" aria-hidden="true" />
         </div>
       </div>
     </header>
-  )
+  );
 }
