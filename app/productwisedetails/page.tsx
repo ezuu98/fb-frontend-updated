@@ -1,8 +1,7 @@
 import type { Metadata } from "next"
 import FreshBasketHeader from "@/components/freshbasket-header"
 import ProductPickers from "@/components/product-pickers"
-import { supabaseServer } from "@/lib/supabase-server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 export const metadata: Metadata = {
   title: "FreshBasket — Live Inventory Tracking",
@@ -19,10 +18,13 @@ function productCode(row: Record<string, any>) {
   )
 }
 
-const getAdmin = () => {
-  // Prefer service role if available; otherwise fallback to anon client
-  return process.env.SUPABASE_SERVICE_ROLE_KEY ? supabaseServer : supabase
-}
+const adminClient = (() => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  return createClient(url, key)
+})()
+
+const getAdmin = () => adminClient
 
 async function fetchAllInventory(admin: ReturnType<typeof getAdmin>) {
   const pageSize = 1000
