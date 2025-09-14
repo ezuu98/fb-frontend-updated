@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useCallback } from "react"
 import debounce from "lodash/debounce"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,7 +41,7 @@ import { useEffect } from "react"
 
 export function InventoryDashboard() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [category, setCategory] = useState("All Categories")
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [stockStatus, setStockStatus] = useState("All Status")
   const [currentView, setCurrentView] = useState<"dashboard" | "sku-detail">("dashboard")
   const [selectedSku, setSelectedSku] = useState<InventoryItem | null>(null)
@@ -90,7 +91,7 @@ export function InventoryDashboard() {
             .map((timestamp: string) => new Date(timestamp));
           
           if (timestamps.length > 0) {
-            const mostRecent = new Date(Math.max(...timestamps.map(d => d.getTime())));
+            const mostRecent = new Date(Math.max(...timestamps.map((d: Date) => d.getTime())));
             setLastSyncTimestamp(mostRecent.toLocaleString());
           }
         }
@@ -239,7 +240,7 @@ export function InventoryDashboard() {
         item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.barcode && item.barcode.includes(searchTerm))
 
-      const matchesCategory = category === "All Categories" || item.category === category
+      const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(item.category)
 
       const matchesStockStatus =
         stockStatus === "All Status" ||
@@ -251,12 +252,12 @@ export function InventoryDashboard() {
     })
     
     return filtered;
-  }, [transformedInventory, searchTerm, category, stockStatus])
+  }, [transformedInventory, searchTerm, selectedCategories, stockStatus])
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1)
-  }, [searchTerm, category, stockStatus, setPage])
+  }, [searchTerm, selectedCategories, stockStatus, setPage])
 
   // Set paginatedData: always slice filteredData for pagination
   const paginatedData = filteredData.slice((page - 1) * itemsPerPage, page * itemsPerPage)
@@ -552,7 +553,7 @@ return (
                 <ExportInventory
                   filteredData={paginatedData}
                   searchTerm={searchTerm}
-                  category={category}
+                  category={selectedCategories.length ? selectedCategories.join(", ") : "All Categories"}
                   stockStatus={stockStatus}
                 />
               </div>
@@ -561,19 +562,48 @@ return (
             <div className="flex justify-between items-center flex-wrap gap-4">
               {/* Left Filters */}
               <div className="flex space-x-4">
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All Categories">All Categories</SelectItem>
-                    {availableCategories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-80 justify-between">
+                      <span className="truncate text-left">
+                        {selectedCategories.length === 0
+                          ? "All Categories"
+                          : selectedCategories.length <= 2
+                            ? selectedCategories.join(", ")
+                            : `${selectedCategories.slice(0, 2).join(", ")} +${selectedCategories.length - 2} more`}
+                      </span>
+                      <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0 ml-2" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-80 max-h-[400px] overflow-auto">
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Checkbox
+                        checked={selectedCategories.length === 0}
+                        onCheckedChange={() => setSelectedCategories([])}
+                      />
+                      <span className="ml-2">All Categories</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {availableCategories.map((cat) => {
+                      const checked = selectedCategories.includes(cat)
+                      return (
+                        <DropdownMenuItem key={cat} onSelect={(e) => e.preventDefault()}>
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(isChecked) => {
+                              if (isChecked) {
+                                setSelectedCategories((prev) => Array.from(new Set([...prev, cat])))
+                              } else {
+                                setSelectedCategories((prev) => prev.filter((c) => c !== cat))
+                              }
+                            }}
+                          />
+                          <span className="ml-2 break-words">{cat}</span>
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 <Select value={stockStatus} onValueChange={setStockStatus}>
                   <SelectTrigger className="w-48">
@@ -635,7 +665,7 @@ return (
                   </TableCell>
                   <TableCell className="text-center">
                     <EditProductModal
-                      product={item.originalData}
+                      product={item.originalData as unknown as any}
                       onProductUpdated={refetch}
                       trigger={
                         <Button variant="outline" size="sm">

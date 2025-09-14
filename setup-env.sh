@@ -8,7 +8,8 @@ echo "🔧 Setting up environment variables for FreshBasket Dashboard..."
 # Create .env.local file
 cat > .env.local << EOF
 # API Configuration
-NEXT_PUBLIC_API_URL=http://47.128.153.244:3001/api
+NEXT_PUBLIC_API_URL=https://api.freshbasket.site/api
+
 
 # Supabase Configuration (if needed)
 # NEXT_PUBLIC_SUPABASE_URL=your-supabase-url

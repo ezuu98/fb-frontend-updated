@@ -39,6 +39,17 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const [forceUpdate, setForceUpdate] = useState(0);
   const [filterLoading, setFilterLoading] = useState(false);
 
+  // If start date is on or before 2025-07-01, don't temper opening stock
+  const shouldUseBaseOpeningOnly = useMemo(() => {
+    try {
+      const cutoff = new Date('2025-07-01');
+      const start = new Date(dateRange.startDate);
+      return start <= cutoff;
+    } catch {
+      return false;
+    }
+  }, [dateRange.startDate]);
+
   // Normalize movement types to a single canonical set
   const normalizeMovementType = (type?: string) => {
     switch ((type || '').toLowerCase()) {
@@ -58,124 +69,118 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   };
 
   // Function to calculate dynamic opening stock: base inventory + historical movements before start date
-  const calculateDynamicOpeningStock = () => {
-    // Seed with base inventory quantities per warehouse
-    const openingStocks: Record<string, number> = {};
+  const calculateDynamicOpeningStock = (
+    historical: StockMovement[],
+    varianceBefore: any[]
+  ): Record<string, number> => {
+    // If start date is 1st July 2025 or earlier, return base inventory without adjustments
+    if (shouldUseBaseOpeningOnly) {
+      const baseOpening: Record<string, number> = {};
+      sku.warehouse_inventory?.forEach((wh) => {
+        const code = wh.warehouse?.code || `unknown_${Math.random()}`;
+        baseOpening[code] = (wh.quantity || 0);
+      });
+      return baseOpening;
+    }
+
+    // Initialize with base inventory quantities per warehouse
+    const computedOpening: Record<string, number> = {};
     sku.warehouse_inventory?.forEach((wh) => {
       const code = wh.warehouse?.code || `unknown_${Math.random()}`;
-      openingStocks[code] = (wh.quantity || 0);
+      computedOpening[code] = (wh.quantity || 0);
     });
 
-    // Sum natural-signed historical movements before start date
-    historicalMovements.forEach((movement) => {
+    // Apply historical movements (movements before start date)
+    historical.forEach((movement) => {
       const type = normalizeMovementType(movement.movement_type);
       const sourceWarehouse = movement.warehouse?.code;
       const destWarehouse = movement.warehouse_dest?.code;
       const quantity = Math.abs(movement.quantity || 0);
 
       // Ensure keys exist
-      if (sourceWarehouse && openingStocks[sourceWarehouse] === undefined) openingStocks[sourceWarehouse] = 0;
-      if (destWarehouse && openingStocks[destWarehouse] === undefined) openingStocks[destWarehouse] = 0;
+      if (sourceWarehouse && computedOpening[sourceWarehouse] === undefined) {
+        computedOpening[sourceWarehouse] = 0;
+      }
+      if (destWarehouse && computedOpening[destWarehouse] === undefined) {
+        computedOpening[destWarehouse] = 0;
+      }
 
       // Apply natural-signed effects to source warehouse
       if (sourceWarehouse) {
-        if (
-          type === 'sales' ||
-          type === 'transfer_out' ||
-          type === 'wastages' ||
-          type === 'consumption' ||
-          type === 'purchase_returns'
-        ) {
-          openingStocks[sourceWarehouse] -= quantity;
-        } else if (
-          type === 'purchase' ||
-          type === 'transfer_in' ||
-          type === 'manufacturing' ||
-          type === 'sales_returns' ||
-          type === 'adjustment'
-        ) {
-          openingStocks[sourceWarehouse] += quantity;
+        if (['sales', 'transfer_out', 'wastages', 'consumption', 'purchase_returns', 'transfer_in'].includes(type)) {
+          computedOpening[sourceWarehouse] -= quantity;
+        } else if (['purchase', 'manufacturing', 'sales_returns', 'adjustment'].includes(type)) {
+          computedOpening[sourceWarehouse] += quantity;
         }
       }
 
       // Apply natural-signed effects to destination warehouse
       if (destWarehouse) {
-        if (
-          type === 'purchase' ||
-          type === 'transfer_in' ||
-          type === 'manufacturing' ||
-          type === 'sales_returns' ||
-          type === 'adjustment'
-        ) {
-          openingStocks[destWarehouse] += quantity;
-        } else if (
-          type === 'sales' ||
-          type === 'transfer_out' ||
-          type === 'wastages' ||
-          type === 'consumption' ||
-          type === 'purchase_returns'
-        ) {
-          openingStocks[destWarehouse] -= quantity;
+        if (['purchase', 'transfer_in', 'manufacturing', 'sales_returns', 'adjustment'].includes(type)) {
+          computedOpening[destWarehouse] += quantity;
+        } else if (['sales', 'transfer_out', 'wastages', 'consumption', 'purchase_returns'].includes(type)) {
+          computedOpening[destWarehouse] -= quantity;
         }
       }
     });
 
-    // Clamp negatives to zero for display friendliness
-    Object.keys(openingStocks).forEach((code) => {
-      if (openingStocks[code] < 0) openingStocks[code] = 0;
+    // Apply variance before start date to opening stock
+    varianceBefore.forEach((variance) => {
+      const warehouseCode = variance.warehouse_code;
+      if (warehouseCode && computedOpening[warehouseCode] !== undefined) {
+        computedOpening[warehouseCode] += variance.cumulative_variance || 0;
+      } else if (warehouseCode) {
+        // Create entry for warehouse if it doesn't exist
+        computedOpening[warehouseCode] = variance.cumulative_variance || 0;
+      }
     });
 
-    return openingStocks;
+    return computedOpening;
   };
-
+  
+  // ADDITIONAL FIX: Ensure warehouseData recalculates when opening stocks change
   const warehouseData = useMemo(() => {
     const warehouses = new Map();
-    const calculatedOpeningStocks = calculateDynamicOpeningStock();
     
     // Add warehouses from inventory data
     sku.warehouse_inventory?.forEach((wh) => {
-      const code = wh.warehouse?.code || `unknown_${Math.random()}`; // Fallback for missing code
+      const code = wh.warehouse?.code || `unknown_${Math.random()}`;
       const name = wh.warehouse?.name || wh.warehouse?.code || "Unknown";
       const warehouseId = wh.warehouse?.id;
       warehouses.set(code, {
         warehouse: name,
         warehouseCode: code,
         warehouseId: warehouseId,
-        openingStock: calculatedOpeningStocks[code] || 0, // Use calculated opening stock
+        openingStock: openingStocks[code] || 0, // This will now use calculated opening stock
         lastUpdated: "N/A",
       });
     });
     
-    // Add warehouses from stock movement data (if not already present)
+    // Add warehouses from stock movement data
     stockMovementData?.forEach((movement) => {
       const sourceWarehouse = movement.warehouse?.code;
       const destWarehouse = movement.warehouse_dest?.code;
       
-      if (sourceWarehouse && !warehouses.has(sourceWarehouse)) {
-        warehouses.set(sourceWarehouse, {
-          warehouse: movement.warehouse?.name || sourceWarehouse,
-          warehouseCode: sourceWarehouse,
-          warehouseId: movement.warehouse?.id,
-          openingStock: calculatedOpeningStocks[sourceWarehouse] || 0, // Use calculated opening stock
-          calculatedStock: 0,
-          lastUpdated: "N/A",
-        });
-      }
-      
-      if (destWarehouse && !warehouses.has(destWarehouse)) {
-        warehouses.set(destWarehouse, {
-          warehouse: movement.warehouse_dest?.name || destWarehouse,
-          warehouseCode: destWarehouse,
-          warehouseId: movement.warehouse_dest?.id,
-          openingStock: calculatedOpeningStocks[destWarehouse] || 0, // Use calculated opening stock
-          calculatedStock: 0,
-          lastUpdated: "N/A",
-        });
-      }
+      [sourceWarehouse, destWarehouse].forEach(warehouseCode => {
+        if (warehouseCode && !warehouses.has(warehouseCode)) {
+          const warehouseInfo = warehouseCode === sourceWarehouse 
+            ? movement.warehouse 
+            : movement.warehouse_dest;
+            
+          warehouses.set(warehouseCode, {
+            warehouse: warehouseInfo?.name || warehouseCode,
+            warehouseCode: warehouseCode,
+            warehouseId: warehouseInfo?.id,
+            openingStock: openingStocks[warehouseCode] || 0, // Use calculated opening stock
+            calculatedStock: 0,
+            lastUpdated: "N/A",
+          });
+        }
+      });
     });
     
     return Array.from(warehouses.values());
-  }, [sku.warehouse_inventory, stockMovementData, historicalMovements, forceUpdate]);
+  }, [sku.warehouse_inventory, stockMovementData, openingStocks]); // openingStocks is key dependency
 
   // Enhanced function to get stock movement data for a warehouse
   const getWarehouseMovements = (warehouseCode: string) => {
@@ -300,12 +305,13 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
   const totals = calculateTotals();
 
   // Function to fetch historical movements for opening stock calculation
-  const fetchHistoricalMovements = async () => {
+  const fetchHistoricalMovements = async (): Promise<StockMovement[]> => {
     const productId = sku.odoo_id || sku.id;
     
     if (!productId) {
-      console.warn('Missing both sku.odoo_id and sku.id for historical movements');
-      return;
+      console.warn('Missing product ID for historical movements');
+      setHistoricalMovements([]);
+      return [];
     }
     
     try {
@@ -318,24 +324,26 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
       
       if (success) {
         setHistoricalMovements(data);
-        console.log(`Fetched ${data.length} historical movements before ${dateRange.startDate}`);
+        console.log(`✅ Fetched ${data.length} historical movements before ${dateRange.startDate}`);
+        return data;
       } else {
-        console.error('Failed to fetch historical movements');
+        console.error('❌ Failed to fetch historical movements');
         setHistoricalMovements([]);
+        return [];
       }
     } catch (err: any) {
-      console.error('Error fetching historical movements:', err);
+      console.error('❌ Error fetching historical movements:', err);
       setHistoricalMovements([]);
+      return [];
     }
   };
-
+  
   // Function to fetch stock movement data
   const fetchStockMovementData = async () => { 
     const productId = sku.odoo_id || sku.id;
     
     if (!productId) {
       console.warn('Missing both sku.odoo_id and sku.id');
-      console.warn('Available sku properties:', Object.keys(sku));
       setStockMovementError('Missing product ID. Please try again.');
       return;
     }
@@ -346,39 +354,78 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     try {
       const productIdString = productId.toString();
       
-      // Fetch historical movements for opening stock calculation
-      await fetchHistoricalMovements();
-      
-      const {success, data, opening_stocks} = await apiClient.getStockMovementDetailsByDateRange(
+      // STEP 1: Fetch historical movements and current date range stock movements
+      const historicalData = await fetchHistoricalMovements();
+      const {success, data} = await apiClient.getStockMovementDetailsByDateRange(
         productIdString,
         dateRange.startDate,
         dateRange.endDate
       );
       
-      if (success) {
-        setStockMovementData(data);
-        setOpeningStocks(opening_stocks || {});
-        
-        try {
-          const varianceResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-with-totals/${productIdString}?start_date=${dateRange.startDate}&end_date=${dateRange.endDate}`, {
+      if (!success) {
+        throw new Error('Failed to fetch stock movement details');
+      }
+      
+      setStockMovementData(data);
+      
+      let varianceBeforeData: any[] = [];
+      let varianceData: any[] = [];
+      try {
+        // STEP 2: Fetch variance before date (for opening stock adjustments)
+        const varianceBeforeResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-before-date/${productIdString}?date=${dateRange.startDate}`, 
+          {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
               'Content-Type': 'application/json'
             }
-          });
-          const varianceData = await varianceResponse.json();
-          if (varianceData.success) {
-            setStockVarianceData(varianceData.data);
-          } else {
-            setStockVarianceData([]);
           }
-        } catch (varianceErr) {
-          console.error('Error fetching variance with totals:', varianceErr);
-          setStockVarianceData([]);
+        );
+        
+        if (varianceBeforeResponse.ok) {
+          const response = await varianceBeforeResponse.json();
+          if (response.success) {
+            varianceBeforeData = response.data;
+            setVarianceBeforeDate(varianceBeforeData);
+          }
         }
-      } else {
-        console.error('Failed to fetch stock movement details');
+
+        // STEP 3: Fetch variance within date range (for display in table)
+        const varianceResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-corrections/variance-with-totals/${productIdString}?start_date=${dateRange.startDate}&end_date=${dateRange.endDate}`, 
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (varianceResponse.ok) {
+          const response = await varianceResponse.json();
+          if (response.success) {
+            varianceData = response.data;
+            setStockVarianceData(varianceData);
+          }
+        }
+      } catch (varianceErr) {
+        console.error('Error fetching variance data:', varianceErr);
+        setStockVarianceData([]);
+        setVarianceBeforeDate([]);
+        varianceBeforeData = [];
+        varianceData = [];
       }
+
+      // STEP 4: Calculate dynamic opening stock with all data available using local data
+      const dynamicOpeningStocks = calculateDynamicOpeningStock(historicalData, varianceBeforeData);
+      setOpeningStocks(dynamicOpeningStocks);
+
+      console.log('✅ Complete opening stock calculation flow completed:', {
+        historicalMovementsCount: historicalData.length,
+        varianceBeforeCount: varianceBeforeData.length,
+        varianceInRangeCount: varianceData.length,
+        finalOpeningStocks: dynamicOpeningStocks
+      });
     } catch (err: any) {
       console.error('Error in fetchStockMovementData:', err);
       setStockMovementError(err.message || "Failed to fetch stock movement data");
@@ -403,14 +450,19 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
     }
   };
 
-  // Initial data fetch on component mount only
+  // Initialize clean state on SKU change only (no auto-fetching)
   useEffect(() => {
     const productId = sku.odoo_id || sku.id;
     if (productId) {
+      setHistoricalMovements([]);
+      setVarianceBeforeDate([]);
+      setStockVarianceData([]);
+      setOpeningStocks({});
+      // Initial load for current month
       fetchStockMovementData();
     }
   }, [sku.odoo_id, sku.id]);
-
+  
   useEffect(() => { 
     setForceUpdate(prev => prev + 1);
   }, [stockMovementData]);
@@ -701,22 +753,22 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
             </div>
 
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="text-xs">
                 <TableHeader>
                   <TableRow className="bg-gray-50">
-                    <TableHead className="font-medium text-gray-700 min-w-[150px]">Warehouse</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Opening Stock</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchases</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Purchase Returns</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Sales</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px]">Sales Returns</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Wastages</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer IN</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Transfer OUT</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Manufacturing</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Consumption</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Stock Variance</TableHead>
-                    <TableHead className="font-medium text-gray-700 text-center min-w-[120px]">Closing Stock</TableHead>
+                    <TableHead className="font-medium text-gray-700 min-w-[130px] px-2 py-1">Warehouse</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[80px] px-2 py-1">Opening Stock</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[80px] px-2 py-1">Purchases</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px] px-2 py-1">Purchase Returns</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[80px] px-2 py-1">Sales</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px] px-2 py-1">Sales Returns</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px] px-2 py-1">Wastages</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px] px-2 py-1">Transfer IN</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px] px-2 py-1">Transfer OUT</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px] px-2 py-1">Manufacturing</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px] px-2 py-1">Consumption</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[90px] px-2 py-1">Stock Variance</TableHead>
+                    <TableHead className="font-medium text-gray-700 text-center min-w-[100px] px-2 py-1">Closing Stock</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -736,76 +788,217 @@ export function SkuDetailView({ sku, onBack }: SkuDetailViewProps) {
                           - Math.abs(movements.wastages)
                           - Math.abs(movements.consumption);
 
-                        const warehouseVariance = stockVarianceData.find(
-                          v => v.warehouse_code === row.warehouseCode
+                        // Handle duplicate warehouses by finding the one with variance or the first one
+                        let finalVariance = 0;
+                        let finalHasVariance = false;
+                        
+                        // Use date range variance for consistency (same as total row)
+                        const dateRangeVariance = stockVarianceData.find(
+                          v => v.warehouse_code === row.warehouseCode && !v.is_total
                         );
-                        const stockVariance = warehouseVariance?.stock_variance || 0;
+                        
+                        if (dateRangeVariance) {
+                          finalVariance = dateRangeVariance.stock_variance || 0;
+                          finalHasVariance = dateRangeVariance.has_variance || false;
+                        }
+                        
+                        const stockVariance = finalVariance;
                         const closingStockWithVariance = closingStock + stockVariance;
-                        const hasVariance = warehouseVariance?.has_variance || false;
+                        const hasVariance = finalHasVariance;
+
+                        // Comprehensive calculation debugging
+                        console.log(`Calculation Debug for ${row.warehouseCode}:`, {
+                          openingStock: row.openingStock,
+                          movements: {
+                            purchases: movements.purchases,
+                            transfer_in: movements.transfer_in,
+                            manufacturing: movements.manufacturing,
+                            sales_returns: movements.sales_returns,
+                            sales: movements.sales,
+                            purchase_returns: movements.purchase_returns,
+                            transfer_out: movements.transfer_out,
+                            wastages: movements.wastages,
+                            consumption: movements.consumption
+                          },
+                          calculation: {
+                            step1: row.openingStock + movements.purchases,
+                            step2: row.openingStock + movements.purchases + movements.transfer_in,
+                            step3: row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing,
+                            step4: row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing + movements.sales_returns,
+                            step5: row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing + movements.sales_returns - Math.abs(movements.sales),
+                            step6: row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing + movements.sales_returns - Math.abs(movements.sales) - Math.abs(movements.purchase_returns),
+                            step7: row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing + movements.sales_returns - Math.abs(movements.sales) - Math.abs(movements.purchase_returns) - Math.abs(movements.transfer_out),
+                            step8: row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing + movements.sales_returns - Math.abs(movements.sales) - Math.abs(movements.purchase_returns) - Math.abs(movements.transfer_out) - Math.abs(movements.wastages),
+                            final: row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing + movements.sales_returns - Math.abs(movements.sales) - Math.abs(movements.purchase_returns) - Math.abs(movements.transfer_out) - Math.abs(movements.wastages) - Math.abs(movements.consumption)
+                          },
+                          closingStock: closingStock,
+                          stockVariance: stockVariance,
+                          closingStockWithVariance: closingStockWithVariance,
+                          verification: {
+                            expected: row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing + movements.sales_returns - Math.abs(movements.sales) - Math.abs(movements.purchase_returns) - Math.abs(movements.transfer_out) - Math.abs(movements.wastages) - Math.abs(movements.consumption) + stockVariance,
+                            actual: closingStockWithVariance,
+                            isCorrect: (row.openingStock + movements.purchases + movements.transfer_in + movements.manufacturing + movements.sales_returns - Math.abs(movements.sales) - Math.abs(movements.purchase_returns) - Math.abs(movements.transfer_out) - Math.abs(movements.wastages) - Math.abs(movements.consumption) + stockVariance) === closingStockWithVariance
+                          }
+                        });
+
+                        // Debug logging for stock variance
+                        if (row.warehouseCode === 'MHOWH') { // Log for first warehouse or specific one
+                          console.log('Stock Variance Debug for warehouse:', row.warehouseCode, {
+                            stockVarianceData: stockVarianceData,
+                            varianceBeforeDate: varianceBeforeDate,
+                            warehouseVariance: dateRangeVariance,
+                            cumulativeVariance: varianceBeforeDate.find(v => v.warehouse_code === row.warehouseCode),
+                            finalVariance: finalVariance,
+                            finalHasVariance: finalHasVariance,
+                            stockVariance: stockVariance,
+                            hasVariance: hasVariance,
+                            warehouseCode: row.warehouseCode
+                          });
+                        }
+
+                        // Additional debugging for all warehouses
+                        console.log(`Warehouse ${row.warehouseCode}:`, {
+                          warehouseCode: row.warehouseCode,
+                          availableVarianceCodes: stockVarianceData.map(v => v.warehouse_code),
+                          availableCumulativeCodes: varianceBeforeDate.map(v => v.warehouse_code),
+                          foundVariance: dateRangeVariance,
+                          cumulativeVariance: varianceBeforeDate.find(v => v.warehouse_code === row.warehouseCode),
+                          stockVariance: stockVariance,
+                          hasVariance: hasVariance
+                        });
 
                         return (
                           <TableRow key={index} className="hover:bg-gray-50">
-                            <TableCell className="font-medium">
+                            <TableCell className="font-medium px-2 py-1">
                               <div>
                                 <div className="font-medium">{row.warehouse}</div>
                                 {row.warehouseCode && (
-                                  <div className="text-sm text-gray-500">{row.warehouseCode}</div>
+                                  <div className="text-xs text-gray-500">{row.warehouseCode}</div>
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="text-center text-blue-600">{row.openingStock}</TableCell>
-                            <TableCell className="text-center text-green-600">{movements.purchases}</TableCell>
-                            <TableCell className="text-center text-orange-600">{movements.purchase_returns}</TableCell>
-                            <TableCell className="text-center text-red-600 font-medium">{movements.sales}</TableCell>
-                            <TableCell className="text-center text-red-600 font-medium">{movements.sales_returns}</TableCell>
-                            <TableCell className="text-center text-red-500">{movements.wastages}</TableCell>
-                            <TableCell className="text-center text-green-500">{movements.transfer_in}</TableCell>
-                            <TableCell className="text-center text-red-500">{movements.transfer_out}</TableCell>
-                            <TableCell className="text-center text-blue-500">{movements.manufacturing}</TableCell>
-                            <TableCell className="text-center text-blue-500">{movements.consumption}</TableCell>
-                            <TableCell className="text-center">
+                            <TableCell className="text-center text-blue-600 px-2 py-1">
+                              {/* Opening stock includes variance adjustments from calculateDynamicOpeningStock */}
+                              {Number(row.openingStock).toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-center text-green-600 px-2 py-1">{Number(movements.purchases).toFixed(2)}</TableCell>
+                            <TableCell className="text-center text-orange-600 px-2 py-1">{Number(movements.purchase_returns).toFixed(2)}</TableCell>
+                            <TableCell className="text-center text-red-600 font-medium px-2 py-1">{Number(movements.sales).toFixed(2)}</TableCell>
+                            <TableCell className="text-center text-red-600 font-medium px-2 py-1">{Number(movements.sales_returns).toFixed(2)}</TableCell>
+                            <TableCell className="text-center text-red-500 px-2 py-1">{Number(movements.wastages).toFixed(2)}</TableCell>
+                            <TableCell className="text-center text-green-500 px-2 py-1">{Number(movements.transfer_in).toFixed(2)}</TableCell>
+                            <TableCell className="text-center text-red-500 px-2 py-1">{Number(movements.transfer_out).toFixed(2)}</TableCell>
+                            <TableCell className="text-center text-blue-500 px-2 py-1">{Number(movements.manufacturing).toFixed(2)}</TableCell>
+                            <TableCell className="text-center text-blue-500 px-2 py-1">{Number(movements.consumption).toFixed(2)}</TableCell>
+                            <TableCell className="text-center px-2 py-1">
                               {hasVariance ? (
                                 <Badge 
                                   variant={stockVariance > 0 ? "destructive" : stockVariance < 0 ? "default" : "secondary"}
                                   className="text-xs"
                                 >
-                                  {stockVariance > 0 ? '+' : ''}{stockVariance}
+                                  {stockVariance > 0 ? '+' : ''}{Number(stockVariance).toFixed(2)}
                                 </Badge>
                               ) : (
                                 <span className="text-gray-400">-</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-center font-medium text-blue-600">{closingStockWithVariance}</TableCell>
+                            <TableCell className="text-center font-medium text-blue-600 px-2 py-1">{Number(closingStockWithVariance).toFixed(2)}</TableCell>
                           </TableRow>
                         );
                       })}
                       <TableRow className="bg-gray-50 border-t-2 border-gray-200">
-                        <TableCell className="font-bold">Total</TableCell>
-                        <TableCell className="text-center font-bold text-blue-600">{totals.totalOpeningStock.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-green-600">{totals.totalPurchases.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-orange-600">{totals.totalPurchaseReturns.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-red-600">{totals.totalSales.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-red-600">{totals.totalSalesReturns.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-red-500">{totals.totalWastages.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-green-500">{totals.totalTransferIN.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-red-500">{totals.totalTransferOUT.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-blue-500">{totals.totalManufacturing.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold text-blue-500">{totals.totalConsumption.toFixed(2)}</TableCell>
-                        <TableCell className="text-center font-bold">
-                          {stockVarianceData.length > 0 ? (
-                            <Badge 
-                              variant={stockVarianceData.filter(v => !v.is_total).reduce((sum, v) => sum + v.stock_variance, 0) > 0 ? "destructive" : "default"}
-                              className="text-xs"
-                            >
-                              {stockVarianceData.filter(v => !v.is_total).reduce((sum, v) => sum + v.stock_variance, 0) > 0 ? '+' : ''}
-                              {stockVarianceData.filter(v => !v.is_total).reduce((sum, v) => sum + v.stock_variance, 0)}
-                            </Badge>
-                          ) : (
-                            '-'
-                          )}
+                        <TableCell className="font-bold px-2 py-1">Total</TableCell>
+                        <TableCell className="text-center font-bold text-blue-600 px-2 py-1">{totals.totalOpeningStock.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-green-600 px-2 py-1">{totals.totalPurchases.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-orange-600 px-2 py-1">{totals.totalPurchaseReturns.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-red-600 px-2 py-1">{totals.totalSales.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-red-600 px-2 py-1">{totals.totalSalesReturns.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-red-500 px-2 py-1">{totals.totalWastages.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-green-500 px-2 py-1">{totals.totalTransferIN.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-red-500 px-2 py-1">{totals.totalTransferOUT.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-500 px-2 py-1">{totals.totalManufacturing.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-500 px-2 py-1">{totals.totalConsumption.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold px-2 py-1">
+                          {(() => {
+                            // Calculate total variance from individual warehouse variances within date range
+                            const totalIndividualVariance = stockVarianceData
+                              .filter(v => !v.is_total)
+                              .reduce((sum, v) => sum + v.stock_variance, 0);
+                            
+                            // Debug logging for total variance calculation
+                            console.log('Total Variance Calculation:', {
+                              stockVarianceData: stockVarianceData,
+                              totalIndividualVariance: totalIndividualVariance
+                            });
+                            
+                            return totalIndividualVariance !== 0 ? (
+                              <Badge 
+                                variant={totalIndividualVariance > 0 ? "destructive" : "default"}
+                                className="text-xs"
+                              >
+                                {totalIndividualVariance > 0 ? '+' : ''}{Number(totalIndividualVariance).toFixed(2)}
+                              </Badge>
+                            ) : (
+                              '-'
+                            );
+                          })()}
                         </TableCell>
-                        <TableCell className="text-center font-bold text-blue-600">
-                          {totals.totalClosingStock + stockVarianceData.filter(v => !v.is_total).reduce((sum, v) => sum + v.stock_variance, 0)}
+                        <TableCell className="text-center font-bold text-blue-600 px-2 py-1">
+                          {(() => {
+                            // Calculate total variance from individual warehouse variances within date range
+                            const totalIndividualVariance = stockVarianceData
+                              .filter(v => !v.is_total)
+                              .reduce((sum, v) => sum + v.stock_variance, 0);
+                            
+                            // Calculate expected total closing stock
+                            const expectedTotalClosingStock = totals.totalOpeningStock + 
+                              totals.totalPurchases + 
+                              totals.totalTransferIN + 
+                              totals.totalManufacturing + 
+                              totals.totalSalesReturns - 
+                              totals.totalSales - 
+                              totals.totalPurchaseReturns - 
+                              totals.totalTransferOUT - 
+                              totals.totalWastages - 
+                              totals.totalConsumption + 
+                              totalIndividualVariance;
+                            
+                            // Debug total calculation
+                            console.log('Total Calculation Verification:', {
+                              totals: {
+                                openingStock: totals.totalOpeningStock,
+                                purchases: totals.totalPurchases,
+                                transferIN: totals.totalTransferIN,
+                                manufacturing: totals.totalManufacturing,
+                                salesReturns: totals.totalSalesReturns,
+                                sales: totals.totalSales,
+                                purchaseReturns: totals.totalPurchaseReturns,
+                                transferOUT: totals.totalTransferOUT,
+                                wastages: totals.totalWastages,
+                                consumption: totals.totalConsumption
+                              },
+                              variance: totalIndividualVariance,
+                              calculation: {
+                                step1: totals.totalOpeningStock + totals.totalPurchases,
+                                step2: totals.totalOpeningStock + totals.totalPurchases + totals.totalTransferIN,
+                                step3: totals.totalOpeningStock + totals.totalPurchases + totals.totalTransferIN + totals.totalManufacturing,
+                                step4: totals.totalOpeningStock + totals.totalPurchases + totals.totalTransferIN + totals.totalManufacturing + totals.totalSalesReturns,
+                                step5: totals.totalOpeningStock + totals.totalPurchases + totals.totalTransferIN + totals.totalManufacturing + totals.totalSalesReturns - totals.totalSales,
+                                step6: totals.totalOpeningStock + totals.totalPurchases + totals.totalTransferIN + totals.totalManufacturing + totals.totalSalesReturns - totals.totalSales - totals.totalPurchaseReturns,
+                                step7: totals.totalOpeningStock + totals.totalPurchases + totals.totalTransferIN + totals.totalManufacturing + totals.totalSalesReturns - totals.totalSales - totals.totalPurchaseReturns - totals.totalTransferOUT,
+                                step8: totals.totalOpeningStock + totals.totalPurchases + totals.totalTransferIN + totals.totalManufacturing + totals.totalSalesReturns - totals.totalSales - totals.totalPurchaseReturns - totals.totalTransferOUT - totals.totalWastages,
+                                step9: totals.totalOpeningStock + totals.totalPurchases + totals.totalTransferIN + totals.totalManufacturing + totals.totalSalesReturns - totals.totalSales - totals.totalPurchaseReturns - totals.totalTransferOUT - totals.totalWastages - totals.totalConsumption,
+                                final: expectedTotalClosingStock
+                              },
+                              verification: {
+                                expected: expectedTotalClosingStock,
+                                actual: totals.totalClosingStock + totalIndividualVariance,
+                                isCorrect: expectedTotalClosingStock === (totals.totalClosingStock + totalIndividualVariance)
+                              }
+                            });
+                            
+                            return Number(totals.totalClosingStock + totalIndividualVariance).toFixed(2);
+                          })()}
                         </TableCell>
                       </TableRow>
                     </>
