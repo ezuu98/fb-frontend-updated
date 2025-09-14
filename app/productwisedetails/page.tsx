@@ -81,26 +81,6 @@ async function fetchCategories(ids: Array<string | number>) {
   return map
 }
 
-async function fetchWarehouses(ids: number[]) {
-  const admin = getAdmin()
-
-  let { data, error } = await admin
-    .from("warehouses")
-    .select("id, display_name")
-    .in("id", ids as any)
-    .order("display_name", { ascending: true })
-
-  if (error || !data || data.length === 0) {
-    const fallback = await admin
-      .from("warehouse")
-      .select("id, display_name")
-      .in("id", ids as any)
-      .order("display_name", { ascending: true })
-    data = fallback.data ?? null
-  }
-
-  return (data ?? []).map((w: any) => ({ id: Number(w.id), display_name: String(w.display_name) }))
-}
 
 export default async function ProductWiseDetailsPage() {
   const admin = getAdmin()
@@ -123,7 +103,6 @@ export default async function ProductWiseDetailsPage() {
       null,
   }))
 
-  const warehouses = await fetchWarehouses([8, 9, 10, 11, 12, 18])
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -133,7 +112,7 @@ export default async function ProductWiseDetailsPage() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Live Inventory Tracking</h1>
 
         <div className="mt-6 w-full">
-          <ProductPickers items={items} warehouses={warehouses} />
+          <ProductPickers items={items} />
           {error && (
             <p className="mt-2 text-sm text-red-600">Failed to load products: {error.message}</p>
           )}

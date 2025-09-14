@@ -1,119 +1,142 @@
-"use client"
+"use client";
 
-import { useMemo, useState } from "react"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useMemo, useState } from "react";
 
-export interface ProductItem {
-  id: string
-  label: string
-  code: string | null
-  category: string | null
-}
+type Item = { id: string; label: string; code?: string | null; category?: string | null };
 
-export interface WarehouseItem {
-  id: number
-  display_name: string
-}
+type Props = {
+  items: Item[];
+};
 
-export default function ProductPickers({ items, warehouses }: { items: ProductItem[]; warehouses: WarehouseItem[] }) {
-  const [query, setQuery] = useState("")
-  const [selectedProduct, setSelectedProduct] = useState<string | null>(null)
-  const [selectedWarehouse, setSelectedWarehouse] = useState<number | null>(null)
+export default function ProductPickers({ items }: Props) {
+  const [qName, setQName] = useState("");
+  const [qCode, setQCode] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return items.slice(0, 50)
-    const res = items.filter((it) => {
-      const code = it.code ? String(it.code).toLowerCase() : ""
-      const cat = it.category ? String(it.category).toLowerCase() : ""
-      return (
-        it.label.toLowerCase().includes(q) ||
-        code.includes(q) ||
-        cat.includes(q)
-      )
-    })
-    return res.slice(0, 50)
-  }, [items, query])
+  const norm = (s: string) => s.normalize("NFKD").toLowerCase();
 
-  const selected = useMemo(() => items.find((i) => i.id === selectedProduct) || null, [items, selectedProduct])
+  const namePool = useMemo(() => {
+    const q = norm(qName.trim());
+    return q ? items.filter((i) => norm(i.label).startsWith(q)) : items;
+  }, [items, qName]);
+
+  const codePool = useMemo(() => {
+    const q = norm(qCode.trim());
+    return q
+      ? items.filter((i) => norm(i.code ?? "").startsWith(q))
+      : items.filter((i) => (i.code ?? "") !== "");
+  }, [items, qCode]);
+
+  const nameSize = useMemo(() => Math.min(10, Math.max(6, namePool.length)), [namePool.length]);
+  const codeSize = useMemo(() => Math.min(10, Math.max(6, codePool.length)), [codePool.length]);
+
+  const onNameChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const ids = Array.from(e.currentTarget.selectedOptions).map((o) => o.value);
+    setSelected((prev) => Array.from(new Set([...prev, ...ids])));
+  };
+
+  const onCodeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const ids = Array.from(e.currentTarget.selectedOptions).map((o) => o.value);
+    setSelected((prev) => Array.from(new Set([...prev, ...ids])));
+  };
+
+  const remove = (id: string) => setSelected((prev) => prev.filter((x) => x !== id));
+
+  const selectedItems = selected
+    .map((id) => items.find((i) => i.id === id))
+    .filter(Boolean) as Item[];
+
+  const namePoolIds = new Set(namePool.map((i) => i.id));
+  const codePoolIds = new Set(codePool.map((i) => i.id));
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Select Product and Warehouse</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div className="md:col-span-2 space-y-2">
-            <label className="text-sm font-medium text-gray-700">Search product</label>
-            <Input
-              placeholder="Search by name, barcode, or category"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Warehouse</label>
-            <Select onValueChange={(v) => setSelectedWarehouse(Number(v))} value={selectedWarehouse?.toString() ?? undefined}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select warehouse" />
-              </SelectTrigger>
-              <SelectContent>
-                {warehouses.map((w) => (
-                  <SelectItem key={w.id} value={String(w.id)}>{w.display_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Matching Products</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead className="text-xs uppercase text-gray-600">Name</TableHead>
-                <TableHead className="text-xs uppercase text-gray-600">Code</TableHead>
-                <TableHead className="text-xs uppercase text-gray-600">Category</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((it) => (
-                <TableRow
-                  key={it.id}
-                  className={selectedProduct === it.id ? "bg-green-50" : "cursor-pointer"}
-                  onClick={() => setSelectedProduct(it.id)}
-                >
-                  <TableCell className="font-medium">{it.label}</TableCell>
-                  <TableCell className="text-gray-600">{it.code ?? "—"}</TableCell>
-                  <TableCell className="text-gray-600">{it.category ?? "—"}</TableCell>
-                </TableRow>
+    <div className="w-full">
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div>
+          <label htmlFor="search-name" className="block text-sm font-medium text-gray-700">
+            Search by name
+          </label>
+          <input
+            id="search-name"
+            type="text"
+            value={qName}
+            onChange={(e) => setQName(e.target.value)}
+            placeholder="Type name..."
+            className="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm focus:border-gray-400 focus:outline-none"
+          />
+          {qName.trim() ? (
+            <select
+              aria-label="Results by name"
+              multiple
+              size={nameSize}
+              className="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm focus:border-gray-400 focus:outline-none"
+              value={selected.filter((id) => namePoolIds.has(id))}
+              onChange={onNameChange}
+            >
+              {namePool.map((it) => (
+                <option key={it.id} value={it.id}>
+                  {it.label}
+                </option>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </select>
+          ) : null}
+        </div>
+        <div>
+          <label htmlFor="search-code" className="block text-sm font-medium text-gray-700">
+            Search by barcode
+          </label>
+          <input
+            id="search-code"
+            type="text"
+            value={qCode}
+            onChange={(e) => setQCode(e.target.value)}
+            placeholder="Type barcode..."
+            className="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm focus:border-gray-400 focus:outline-none"
+          />
+          {qCode.trim() ? (
+            <select
+              aria-label="Results by barcode"
+              multiple
+              size={codeSize}
+              className="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm focus:border-gray-400 focus:outline-none"
+              value={selected.filter((id) => codePoolIds.has(id))}
+              onChange={onCodeChange}
+            >
+              {codePool.map((it) => (
+                <option key={it.id} value={it.id}>
+                  {(it.code ? `${it.code} — ` : "") + it.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
+      </div>
 
-      {selected && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Selected</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-gray-800 space-y-1">
-            <div><span className="font-medium">Product:</span> {selected.label}</div>
-            <div><span className="font-medium">Code:</span> {selected.code ?? "—"}</div>
-            <div><span className="font-medium">Category:</span> {selected.category ?? "—"}</div>
-            <div><span className="font-medium">Warehouse:</span> {selectedWarehouse != null ? warehouses.find(w => w.id === selectedWarehouse)?.display_name ?? selectedWarehouse : "—"}</div>
-          </CardContent>
-        </Card>
-      )}
+      <div className="mt-6">
+        <h2 className="text-sm font-semibold text-gray-800">Selected products</h2>
+        {selectedItems.length === 0 ? (
+          <p className="mt-2 text-sm text-gray-600">No products selected</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-gray-200 rounded-md border border-gray-200">
+            {selectedItems.map((it) => (
+              <li key={it.id} className="flex items-center justify-between px-4 py-2">
+                <span className="truncate text-sm text-gray-900">
+                  {it.label}
+                  {it.category ? <span className="text-gray-500"> [{it.category}] (Category)</span> : null}
+                  {it.code ? <span className="text-gray-500"> — {it.code}</span> : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(it.id)}
+                  className="ml-4 inline-flex items-center rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
-  )
+  );
 }
